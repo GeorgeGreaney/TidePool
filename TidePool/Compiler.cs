@@ -22,13 +22,18 @@ using System.Text;
 
 namespace TidePool
 {
-    class Compiler
+    public class Compiler
     {
-        public Options opts;
+        public TidePool tp;
 
-        public Compiler(Options _opts)
+        public Compiler(TidePool _tp)
         {
-            opts = _opts;
+            tp = _tp;
+        }
+
+        internal void compile()
+        {
+            throw new NotImplementedException();
         }
     }
 }
