@@ -39,6 +39,11 @@ namespace TidePool
 
         public List<BufferedFile> infiles;
 
+        /* compilation */
+        public int INCLUDE_STACK_SIZE = 32;
+        public BufferedFile[] include_stack;
+        public int include_stack_ptr;
+
         public int ifdef_stack_ptr;
 
         public int verbose;
@@ -54,6 +59,7 @@ namespace TidePool
         {
             tidepool = new TidePool();
             tidepool.compile(args);
+            Console.Out.WriteLine("done");
         }
 
         public TidePool()
@@ -63,6 +69,11 @@ namespace TidePool
 
             files = new List<FileSpec>();
             infiles = new List<BufferedFile>();
+
+            include_stack = new BufferedFile[INCLUDE_STACK_SIZE];
+            include_stack_ptr = 0;
+
+            ifdef_stack_ptr = 0;
 
             verbose = 0;
         }

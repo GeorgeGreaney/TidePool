@@ -25,6 +25,8 @@ namespace TidePool
 {
     public enum TPTOKEN
     {
+        TOK_LAST = Preprocessor.TOK_IDENT - 1,
+
         TOK_INT,
         TOK_VOID,
         TOK_CHAR,
@@ -179,6 +181,7 @@ namespace TidePool
     public class Preprocessor
     {
         public const int TOK_EOF = -1;
+        public const int TOK_LINEFEED = 10;             /* line feed */
 
         public TidePool tp;
 
@@ -187,10 +190,23 @@ namespace TidePool
         public int ch;
         public int tok;
 
+        public int tokenFlags;
         public int parseFlags;
 
         public int total_lines;
         public int total_bytes;
+
+        public int tok_ident;
+        public List<TokenSym> table_ident;
+
+        public const int TOK_IDENT = 256;
+
+        public int SYM_FIRST_ANOM = 0x10000000;                 /* first anonymous sym */
+
+        public const int TOK_FLAG_BOL = 0x0001;		            /* beginning of line before */
+        public const int TOK_FLAG_BOF = 0x0002;		            /* beginning of file before */
+        public const int TOK_FLAG_ENDIF = 0x0004;		        /* a endif was found matching starting #ifdef */
+        public const int TOK_FLAG_EOF = 0x0008;		            /* end of file */
 
         public const int PARSE_FLAG_PREPROCESS = 0x0001;	    /* activate preprocessing */
         public const int PARSE_FLAG_TOK_NUM = 0x0002;	        /* return numbers instead of TOK_PPNUM */
@@ -200,6 +216,9 @@ namespace TidePool
         public const int PARSE_FLAG_ACCEPT_STRAYS = 0x0020;     /* next() returns '\\' token */
         public const int PARSE_FLAG_TOK_STR = 0x0040;	        /* return parsed strings instead of TOK_PPSTR */
 
+        public const int TOK_HASH_SIZE = 16384;                 /* must be a power of two */
+        static List<TokenSym>[] hash_ident;			            //symbol tbl
+
         public int[] isidnum_table;
 
         /* isidnum_table flags: */
@@ -207,11 +226,26 @@ namespace TidePool
         public const int IS_ID = 2;
         public const int IS_NUM = 4;
 
+        public string[] tcc_keywords = { "int", "void", "char", "if", "else", "while", "break",
+                "return", "for", "extern", "static", "unsigned", "goto", "do", "continue", "switch", "case"};
+
+
         //---------------------------------------------------------------------
 
         public Preprocessor(TidePool _tp)
         {
             tp = _tp;
+
+            table_ident = new List<TokenSym>();
+
+            hash_ident = new List<TokenSym>[TOK_HASH_SIZE];
+
+            //add keywords to symbol tbl
+            tok_ident = TOK_IDENT;
+            foreach (String keystr in tcc_keywords)
+            {
+                tok_alloc(keystr, keystr.Length);      //add keyword to sym tbl
+            }
 
             // init isid table 
             isidnum_table = new int[256 - BufferedFile.CH_EOF];
@@ -224,6 +258,8 @@ namespace TidePool
 
             for (int i = 128; i < 256; i++)
                 set_idnum(i, IS_ID);
+
+
         }
 
         public bool is_space(int ch)
@@ -251,11 +287,6 @@ namespace TidePool
             return (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
         }
 
-        public uint TOK_HASH_FUNC(uint h, int c)
-        {
-            return ((h) + ((h) << 5) + ((h) >> 27) + (uint)(c));
-        }
-
         public void skip() { }
         public void expect() { }
 
@@ -268,10 +299,72 @@ namespace TidePool
         public void cstr_reset() { }
         public void add_char() { }
 
-        public void tok_alloc_new() { }
-        public void tok_alloc() { }
+        //- tokens ------------------------------------------------------------
 
-        public string get_tok_str(int tok) 
+        /* allocate a new token */
+        public TokenSym tok_alloc_new(uint hash, String idstr, int len)
+        {
+            TokenSym ts;
+            int i;
+
+            if (tok_ident >= SYM_FIRST_ANOM)
+            {
+                tp.tp_error("memory full (symbols)");
+            }
+
+            i = tok_ident - TOK_IDENT;
+            ts = new TokenSym(idstr, len);          //alloc new token rec
+            table_ident.Add(ts);					//and store in ident tbl
+            ts.tok = tok_ident++;					//token num is ident tbl idx
+
+            List<TokenSym> pts = hash_ident[hash];
+            if (pts == null)
+            {
+                pts = new List<TokenSym>();
+                hash_ident[hash] = pts;
+            }
+            pts.Add(ts);                	    //add ident to sym tbl
+            return ts;
+        }
+
+        public uint TOK_HASH_FUNC(uint h, int c)
+        {
+            return ((h) + ((h) << 5) + ((h) >> 27) + (uint)(c));
+        }
+
+        /* find a token and add it if not found */
+        public TokenSym tok_alloc(string idstr, int len)
+        {
+            TokenSym ts;
+
+            List<TokenSym> pts;
+            int i;
+            uint h;
+
+            //hash token str
+            h = 1;
+            for (i = 0; i < len; i++)
+            {
+                h = TOK_HASH_FUNC(h, (int)idstr[i]);
+            }
+            h &= (TOK_HASH_SIZE - 1);
+
+            pts = hash_ident[h];		//get sym tbl slot
+            if (pts != null)
+            {
+                for (i = 0; i < pts.Count; i++)
+                {
+                    ts = pts[i];
+                    if ((ts.len == len) && (ts.str.Equals(idstr)))
+                        return ts;
+                }
+            }
+
+            //if not found, alloc new token symbol & add it to sym table
+            return tok_alloc_new(h, idstr, len);
+        }
+
+        public string get_tok_str(int tok)
         {
             return "foo";
         }
@@ -283,7 +376,7 @@ namespace TidePool
             /* only tries to read if really end of buffer */
             if (curFile.buf_ptr >= curFile.buf_end)
             {
-                if (curFile.fs != null)
+                if ((curFile.fs != null) && (curFile.fs.Length > curFile.bytesRead))
                 {
                     len = TidePool.IO_BUF_SIZE;
                     len = curFile.fs.Read(curFile.buffer, curFile.bytesRead, len);      //read source file -> buf
@@ -351,7 +444,7 @@ namespace TidePool
         public void parse_line_comment() { }
         public void parse_comment() { }
 
-        public int set_idnum(int c, int val) 
+        public int set_idnum(int c, int val)
         {
             int idx = c - BufferedFile.CH_EOF;
             int prev = isidnum_table[idx];
@@ -397,6 +490,8 @@ namespace TidePool
 
         public void next_nomacro1()
         {
+            TokenSym ts = null;
+
             int p = curFile.buf_ptr;
 
         redo_no_start:
@@ -429,26 +524,24 @@ namespace TidePool
                         goto parse_simple;
                     if (c != BufferedFile.CH_EOF)
                         goto redo_no_start;
-                    //        {
+                            {
                     //            TCCState *s1 = tcc_state;
-                    //            if ((parse_flags & PARSE_FLAG_LINEFEED)
-                    //                && !(tok_flags & TOK_FLAG_EOF)) {
-                    //                tok_flags |= TOK_FLAG_EOF;
-                    //                tok = TOK_LINEFEED;
-                    //                goto keep_tok_flags;
-                    //            } else if (!(parse_flags & PARSE_FLAG_PREPROCESS)) {
-                    //                tok = TOK_EOF;
-                    //            } else if (s1->ifdef_stack_ptr != file->ifdef_stack_ptr) {
-                    //                tcc_error("missing #endif");
-                    //            } else if (s1->include_stack_ptr == s1->include_stack) {
-                    //                /* no include left : end of file. */
-                    //                tok = TOK_EOF;
-                    //            } else {
-                    //                tok_flags &= ~TOK_FLAG_EOF;
-                    //                /* pop include file */
+                                if (((parseFlags & PARSE_FLAG_LINEFEED) != 0) && !((tokenFlags & TOK_FLAG_EOF) != 0)) {
+                                    tokenFlags |= TOK_FLAG_EOF;
+                                    tok = TOK_LINEFEED;
+                                    goto keep_tok_flags;
+                                } else if (!((parseFlags & PARSE_FLAG_PREPROCESS) != 0)) {
+                                    tok = TOK_EOF;
+                                } else if (tp.ifdef_stack_ptr != 0) {
+                                    tp.tp_error("missing #endif");
+                                } else if (tp.include_stack_ptr == 0) {
+                                    /* no include left : end of file. */
+                                    tok = TOK_EOF;
+                                } else {
+                                    tokenFlags &= ~TOK_FLAG_EOF;
+                                    /* pop include file */
 
-                    //                /* test if previous '#endif' was after a #ifdef at
-                    //                   start of file */
+                                    /* test if previous '#endif' was after a #ifdef at start of file */
                     //                if (tok_flags & TOK_FLAG_ENDIF) {
                     //#ifdef INC_DEBUG
                     //                    printf("#endif %s\n", get_tok_str(file->ifndef_macro_saved, NULL));
@@ -468,12 +561,20 @@ namespace TidePool
                     //                p = file->buf_ptr;
                     //                if (p == file->buffer)
                     //                    tok_flags = TOK_FLAG_BOF|TOK_FLAG_BOL;
-                    //                goto redo_no_start;
-                    //            }
-                    //        }
+                                    goto redo_no_start;
+                                }
+                            }
                     break;
 
                 case '\n':
+                            curFile.line_num++;
+        tokenFlags |= TOK_FLAG_BOL;
+        p++;
+maybe_newline:
+        if ((parseFlags & PARSE_FLAG_LINEFEED) == 0)
+            goto redo_no_start;
+        tok = TOK_LINEFEED;
+        goto keep_tok_flags;
 
                 case '#':
 
@@ -537,45 +638,51 @@ namespace TidePool
                         //hash ident str
                         uint h = 1;
                         h = TOK_HASH_FUNC(h, c);
+                        String idstr = "" + (char)c;
                         c = curFile.buffer[++p];
                         while (((isidnum_table[c - BufferedFile.CH_EOF] & (IS_ID | IS_NUM)) != 0))
                         {
                             h = TOK_HASH_FUNC(h, c);
+                            idstr += (char)c;
                             c = curFile.buffer[++p];
                         }
                         int len = p - p1;
 
-                        //if (c != '\\') {
-                        //    TokenSym **pts;
+                        if (c != '\\')
+                        {
+                            List<TokenSym> pts;
 
-                        //    /* fast case : no stray found, so we have the full token and we have already hashed it */
-                        //    h &= (TOK_HASH_SIZE - 1);
-                        //    pts = &hash_ident[h];
-                        //    for(;;) {
-                        //        ts = *pts;
-                        //        if (!ts)
-                        //            break;
-                        //        if (ts->len == len && !memcmp(ts->str, p1, len))
-                        //            goto token_found;
-                        //        pts = &(ts->hash_next);
-                        //    }
-                        //    ts = tok_alloc_new(pts, (char *) p1, len);
-                        //token_found: ;
-                        //} else {
-                        //    /* slower case */
-                        //    cstr_reset(&tokcstr);
-                        //    cstr_cat(&tokcstr, (char *) p1, len);
-                        //    p--;
-                        //    PEEKC(c, p);
-                        //parse_ident_slow:
-                        //    while (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))
-                        //    {
-                        //        cstr_ccat(&tokcstr, c);
-                        //        PEEKC(c, p);
-                        //    }
-                        //    ts = tok_alloc(tokcstr.data, tokcstr.size);
-                        //}
-                        //tok = ts->tok;
+                            /* fast case : no stray found, so we have the full token and we have already hashed it */
+                            h &= (TOK_HASH_SIZE - 1);
+                            pts = hash_ident[h];
+                            if (pts != null)
+                            {
+                                for (int i = 0; i < pts.Count; i++)
+                                {
+                                    ts = pts[i];
+                                    if ((ts.len == len) && (ts.str.Equals(idstr)))
+                                        goto token_found;
+                                }
+                            }
+                            ts = tok_alloc_new(h, idstr, len);
+                        token_found: ;
+                        }
+                        else
+                        {
+                            //    /* slower case */
+                            //    cstr_reset(&tokcstr);
+                            //    cstr_cat(&tokcstr, (char *) p1, len);
+                            //    p--;
+                            //    PEEKC(c, p);
+                            //parse_ident_slow:
+                            //    while (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM))
+                            //    {
+                            //        cstr_ccat(&tokcstr, c);
+                            //        PEEKC(c, p);
+                            //    }
+                            //    ts = tok_alloc(tokcstr.data, tokcstr.size);
+                        }
+                        tok = ts.tok;
                         break;
                     }
 
@@ -633,10 +740,12 @@ namespace TidePool
 
             }
 
-       keep_tok_flags:
+            tokenFlags = 0;
+
+        keep_tok_flags:
             curFile.buf_ptr = p;			//update pos buf
 
-            Console.Out.WriteLine("token = {0} {1}\n", tok, get_tok_str(tok)); //, tokc));
+            Console.Out.WriteLine("token = {0} {1}", tok.ToString("X2"), get_tok_str(tok)); //, tokc));
         }
 
         public void next_nomacro_spc()
@@ -670,11 +779,11 @@ namespace TidePool
         {
             curFile = tp.infiles[tp.infiles.Count - 1];
             total_lines = 0;
+            tokenFlags = TOK_FLAG_BOL | TOK_FLAG_BOF;
         }
 
         public void preprocess_end() { }
 
-        public void pp_new() { }
         public void pp_delete() { }
         public void tok_print() { }
 
@@ -748,6 +857,38 @@ namespace TidePool
             fs = null;
             bytesRead = 0;
         }
+    }
+
+    //-------------------------------------------------------------------------
+
+    public class TokenSym
+    {
+        public Sym sym_define; 	        /* direct pointer to define */
+        public Sym sym_label; 	            /* direct pointer to label */
+        public Sym sym_struct; 	        /* direct pointer to structure */
+        public Sym sym_identifier;         /* direct pointer to identifier */
+
+        public int tok; 			                /* token number */
+        public int len;
+        public string str;
+
+        public TokenSym(string _str, int _len)
+        {
+            str = _str;
+            len = _len;
+
+            sym_define = null;
+            sym_label = null;
+            sym_struct = null;
+            sym_identifier = null;
+
+        }
+    }
+
+    //-------------------------------------------------------------------------
+
+    public class Sym
+    {
     }
 }
 
