@@ -25,6 +25,22 @@ namespace TidePool
 {
     public enum TPTOKEN
     {
+        TOK_TWODOTS = 0xa8,         /* C++ token ? */
+        TOK_CCHAR = 0xb3,           /* char constant in tokc */
+        TOK_LCHAR = 0xb4,
+        TOK_CINT = 0xb5,            /* number in tokc */
+        TOK_CUINT = 0xb6,           /* unsigned int constant */
+        TOK_CLLONG = 0xb7,          /* long long constant */
+        TOK_CULLONG = 0xb8,         /* unsigned long long constant */
+        TOK_STR = 0xb9,             /* pointer to string in tokc */
+        TOK_LSTR = 0xba,
+        TOK_CFLOAT = 0xbb,          /* float constant */
+        TOK_CDOUBLE = 0xbc,         /* double constant */
+        TOK_CLDOUBLE = 0xbd,        /* long double constant */
+        TOK_PPNUM = 0xbe,           /* preprocessor number */
+        TOK_PPSTR = 0xbf,           /* preprocessor string */
+        TOK_LINENUM = 0xc0,         /* line number info */
+
         TOK_LAST = Preprocessor.TOK_IDENT - 1,
 
         TOK_INT,
@@ -185,13 +201,14 @@ namespace TidePool
 
         public TidePool tp;
 
-        public BufferedFile curFile;
-
-        public int ch;
-        public int tok;
-
         public int tokenFlags;
         public int parseFlags;
+
+        public BufferedFile curFile;
+        public int ch;
+        public int tok;
+        public int macro_ptr;
+        public String tokcstr;					/* current parsed string, if any */
 
         public int total_lines;
         public int total_bytes;
@@ -235,6 +252,8 @@ namespace TidePool
         public Preprocessor(TidePool _tp)
         {
             tp = _tp;
+
+            macro_ptr = 0;
 
             table_ident = new List<TokenSym>();
 
@@ -282,9 +301,9 @@ namespace TidePool
             return c >= '0' && c <= '7';
         }
 
-        public int toup(int c)
+        public char toup(char c)
         {
-            return (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
+            return (c >= 'a' && c <= 'z') ? (char)((int)c - 'a' + 'A') : c;
         }
 
         public void skip() { }
@@ -440,6 +459,18 @@ namespace TidePool
             return c;
         }
 
+        /* handle the complicated stray case */
+        public void PEEKC(ref int c, ref int p)
+        {
+            p++;
+            c = curFile.buffer[p];
+            if (c == '\\')
+            {
+                c = handle_stray1(p);
+                p = curFile.buf_ptr;
+            }
+        }
+
         public void minp() { }
         public void parse_line_comment() { }
         public void parse_comment() { }
@@ -488,9 +519,12 @@ namespace TidePool
         public void bn_zero() { }
         public void parse_number() { }
 
+        //- scanning & macro subs -----------------------------------------------------
+
         public void next_nomacro1()
         {
             TokenSym ts = null;
+            int t;
 
             int p = curFile.buf_ptr;
 
@@ -567,17 +601,18 @@ namespace TidePool
                     break;
 
                 case '\n':
-                            curFile.line_num++;
-        tokenFlags |= TOK_FLAG_BOL;
-        p++;
-maybe_newline:
-        if ((parseFlags & PARSE_FLAG_LINEFEED) == 0)
-            goto redo_no_start;
-        tok = TOK_LINEFEED;
-        goto keep_tok_flags;
+                    curFile.line_num++;
+                    tokenFlags |= TOK_FLAG_BOL;
+                    p++;
+                maybe_newline:
+                    if ((parseFlags & PARSE_FLAG_LINEFEED) == 0)
+                        goto redo_no_start;
+                    tok = TOK_LINEFEED;
+                    goto keep_tok_flags;
 
                 case '#':
 
+                //identifiers
                 case '$':
 
                 case 'a':
@@ -688,6 +723,7 @@ maybe_newline:
 
                 case 'L':
 
+//digits
                 case '0':
                 case '1':
                 case '2':
@@ -698,6 +734,30 @@ maybe_newline:
                 case '7':
                 case '8':
                 case '9':
+                    t = c;
+                    PEEKC(ref c, ref p);
+                /* after the first digit, accept digits, alpha, '.' or sign if prefixed by 'eEpP' */
+                parse_num:
+                    tokcstr = "";		//clear buf to hold num str
+                    for (; ; )
+                    {
+                        tokcstr += (char)t;             //add digit
+                        if (!(((isidnum_table[c - BufferedFile.CH_EOF] & (IS_ID | IS_NUM)) != 0)
+                              || (c == '.')
+                              || ((c == '+' || c == '-')
+                                  && (((t == 'e' || t == 'E')
+                                        && !((parseFlags & PARSE_FLAG_ASM_FILE) != 0)
+                            /* 0xe+1 is 3 tokens in asm */
+                                            && ((tokcstr[0] == '0') && (toup(tokcstr[1]) == 'X'))
+                                      || t == 'p' || t == 'P')))))
+                            break;
+                        t = c;
+                        PEEKC(ref c, ref p);		//get next char
+                    }
+                    /* We add a trailing '\0' to ease parsing */
+                    tokcstr += '\0';
+                    tok = (int)TPTOKEN.TOK_PPNUM;
+                    break;
 
                 case '.':
 
@@ -718,6 +778,7 @@ maybe_newline:
 
                 case '/':
 
+                /* simple tokens */
                 case '(':
                 case ')':
                 case '[':
@@ -750,10 +811,32 @@ maybe_newline:
 
         public void next_nomacro_spc()
         {
-            next_nomacro1();
+            if (macro_ptr > 0)
+            {
+                //    redo:
+                //        tok = *macro_ptr;
+                //        if (tok) {
+                //            TOK_GET(&tok, &macro_ptr, &tokc);
+                //            if (tok == TOK_LINENUM) {
+                //                file->line_num = tokc.i;
+                //                goto redo;
+                //            }
+                //        }
+            }
+            else
+            {
+                next_nomacro1();
+            }
         }
 
-        public void next_nomacro() { }
+        public void next_nomacro() 
+        {
+            do
+            {
+                next_nomacro_spc();
+            } while (tok < 256 && ((isidnum_table[tok - BufferedFile.CH_EOF] & IS_SPC) != 0));
+        }
+
         public void macro_arg_subst() { }
         public void paste_tokens() { }
         public void macro_twosharps() { }
@@ -771,6 +854,36 @@ maybe_newline:
             {
                 next_nomacro();
             }
+            //    if (macro_ptr) {
+            //        if (tok == TOK_NOSUBST || tok == TOK_PLCHLDR) {
+            //        /* discard preprocessor markers */
+            //            goto redo;
+            //        } else if (tok == 0) {
+            //            /* end of macro or unget token string */
+            //            end_macro();
+            //            goto redo;
+            //        }
+            //    } else if (tok >= TOK_IDENT && (parse_flags & PARSE_FLAG_PREPROCESS)) {
+            //        Sym *s;
+            //        /* if reading from file, try to substitute macros */
+            //        s = define_find(tok);
+            //        if (s) {
+            //            Sym *nested_list = NULL;
+            //            tokstr_buf.len = 0;
+            //            macro_subst_tok(&tokstr_buf, &nested_list, s);
+            //            tok_str_add(&tokstr_buf, 0);
+            //            begin_macro(&tokstr_buf, 2);
+            //            goto redo;
+            //        }
+            //    }
+            //    /* convert preprocessor tokens into C tokens */
+            //    if (tok == TOK_PPNUM) {
+            //        if  (parse_flags & PARSE_FLAG_TOK_NUM)
+            //            parse_number((char *)tokc.str.data);
+            //    } else if (tok == TOK_PPSTR) {
+            //        if (parse_flags & PARSE_FLAG_TOK_STR)
+            //            parse_string((char *)tokc.str.data, tokc.str.size - 1);
+            //    }
         }
 
         public void unget_tok() { }
@@ -885,11 +998,6 @@ maybe_newline:
         }
     }
 
-    //-------------------------------------------------------------------------
-
-    public class Sym
-    {
-    }
 }
 
 //Console.Out.WriteLine("There's no sun in the shadow of the wizard");
