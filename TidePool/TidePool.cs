@@ -66,11 +66,11 @@ namespace TidePool
 //    int output_format;
 
     /* C language options */
-    public int char_is_unsigned;
-    public int leading_underscore;
-    public int ms_extensions;			/* allow nested named struct w/o identifier behave like unnamed */
-    public int dollars_in_identifiers;	/* allows '$' char in identifiers */
-    public int ms_bitfields;			/* if true, emulate MS algorithm for aligning bitfields */
+    public bool char_is_unsigned;
+    public bool leading_underscore;
+    public bool ms_extensions;			/* allow nested named struct w/o identifier behave like unnamed */
+    public bool dollars_in_identifiers;	/* allows '$' char in identifiers */
+    public bool ms_bitfields;			/* if true, emulate MS algorithm for aligning bitfields */
 
 //    /* warning switches */
 //    int warn_write_strings;
@@ -129,12 +129,12 @@ namespace TidePool
 //    char **cmd_include_files;
 //    int nb_cmd_include_files;
 
-//    /* error handling */
+    /* error handling */
 //    void *error_opaque;
 //    void (*error_func)(void *opaque, const char *msg);
 //    int error_set_jmp_enabled;
 //    jmp_buf error_jmp_buf;
-//    int nb_errors;
+    int nb_errors;
 
 //    /* output file for preprocessing (-E) */
 //    FILE *ppfp;
@@ -230,9 +230,6 @@ namespace TidePool
 //    int option_pthread;			/* -pthread option */
 //    int argc;
 //    char **argv;
-
-
-        public int nb_errors;
 
         public const int AFF_PRINT_ERROR = 0x10;        /* print error if file not found */
         public const int AFF_REFERENCED_DLL = 0x20;     /* load a referenced dll from another dll */

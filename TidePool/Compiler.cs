@@ -29,6 +29,10 @@ namespace TidePool
 
         public const int LONG_SIZE = 4;
 
+        public int SYM_STRUCT = 0x40000000;         /* struct/union/enum symbol space */
+        public int SYM_FIELD = 0x20000000;          /* struct/union field symbol space */
+        public int SYM_FIRST_ANOM = 0x10000000;     /* first anonymous sym */
+
         public const int VT_VALMASK = 0x003f;  /* mask for value location, register or: */
         public const int VT_CONST = 0x0030;  /* constant in vc (must be first non register value) */
         public const int VT_LLOCAL = 0x0031;  /* lvalue, offset on stack */
@@ -90,9 +94,22 @@ namespace TidePool
         public const int VT_STORAGE = (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE);
         public const int VT_TYPE = (~(VT_STORAGE | VT_STRUCT_MASK));
 
+        public List<Sym> global_stack;
+        public List<Sym> local_stack;
+        public List<Sym> define_stack;
+        public List<Sym> global_label_stack;
+        public List<Sym> local_label_stack;
+        public int local_scope;
+        public int in_sizeof;
+        public int section_sym;
+
+
         public Compiler(TidePool _tp)
         {
             tp = _tp;
+
+            global_stack = new List<Sym>();
+            local_stack = null;
         }
 
         public void is_float() { }
@@ -157,19 +174,69 @@ namespace TidePool
         public void put_extern_sym() { }
         public void greloca() { }
         public void greloc() { }
-        public void __sym_malloc() { }
-        public void sym_malloc() { }
-        public void sym_free() { }
-        public void sym_push2() { }
+
+        //- symbols -----------------------------------------------------------
+
+        public Sym sym_push2(List<Sym> ps, int v, int t, int c)
+        {
+            Sym s = new Sym();
+
+            s.v = v;
+            s.type.t = t;
+            s.c = c;
+
+            /* add in stack */
+            ps.Add(s);
+            return s;
+        }
+
         public void sym_find2() { }
         public void struct_find() { }
 
         public Sym sym_find(int v)
         {
-            return null;
+            if ((v < Preprocessor.TOK_IDENT) || (v > prep.tok_ident))
+                return null;
+
+            //v -= TOK_IDENT;
+            //if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
+            //    return NULL;
+            return prep.table_ident[v].sym_identifier;
         }
 
-        public void sym_push() { }
+        public Sym sym_push(int v, CType type, int r, int c)
+        { 
+                Sym s; 
+            List<Sym> ps;
+    TokenSym ts;
+
+    if (local_stack != null)
+        ps = local_stack;
+    else
+        ps = global_stack;
+    s = sym_push2(ps, v, type.t, c);
+    s.type.reff = type.reff;
+    s.r = r;
+    
+    /* don't record fields or anonymous symbols */
+    /* XXX: simplify */
+    if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
+        /* record symbol in token array */
+        ts = table_ident[(v & ~SYM_STRUCT) - TOK_IDENT];
+//        if (v & SYM_STRUCT)
+//            ps = &ts->sym_struct;
+//        else
+//            ps = &ts->sym_identifier;
+//        s->prev_tok = *ps;
+//        *ps = s;
+//        s->sym_scope = local_scope;
+//        if (s->prev_tok && s->prev_tok->sym_scope == s->sym_scope)
+//            tcc_error("redeclaration of '%s'",
+//                get_tok_str(v & ~SYM_STRUCT, NULL));
+    }
+    return s;
+        }
+
         public void global_identifier_push() { }
         public void sym_pop() { }
         public void vsetc() { }
@@ -255,7 +322,7 @@ namespace TidePool
         public void struct_add_offset() { }
         public void struct_layout() { }
 
-        public void struct_decl(ref CType type, int u)
+        public void struct_decl(CType type, int u)
         {
         }
 
@@ -267,16 +334,16 @@ namespace TidePool
         {
         }
 
-        public bool parse_btype(ref CType type, ref AttributeDef ad)
+        public bool parse_btype(CType type, AttributeDef ad)
         {
             int u = 0;
             int bt;
             int st;
             int g;
             Sym s;
-            CType type1 = null;
+            CType type1 = new CType();
 
-            ad = new AttributeDef();
+            ad.reset();
             bool type_found = false;
             bool typespec_found = false;
             int t = VT_INT;
@@ -368,19 +435,20 @@ namespace TidePool
                         prep.next();
                         break;
 
+                        //structured typed
                     case TPTOKEN.TOK_ENUM:
-                        struct_decl(ref type1, VT_ENUM);
+                        struct_decl(type1, VT_ENUM);
                     basic_type2:
                         u = type1.t;
                         type.reff = type1.reff;
                         goto basic_type1;
 
                     case TPTOKEN.TOK_STRUCT:
-                        struct_decl(ref type1, VT_STRUCT);
+                        struct_decl(type1, VT_STRUCT);
                         goto basic_type2;
 
                     case TPTOKEN.TOK_UNION:
-                        struct_decl(ref type1, VT_UNION);
+                        struct_decl(type1, VT_UNION);
                         goto basic_type2;
 
                     /* type modifiers */
@@ -469,7 +537,7 @@ namespace TidePool
                     case TPTOKEN.TOK_TYPEOF2:
                     case TPTOKEN.TOK_TYPEOF3:
                         prep.next();
-                        parse_expr_type(ref type1);
+                        parse_expr_type(type1);
                         /* remove all storage modifiers except typedef */
                         type1.t &= ~(VT_STORAGE & ~VT_TYPEDEF);
                         if (type1.reff != null)
@@ -532,7 +600,7 @@ namespace TidePool
         public void gfunc_param_typed() { }
         public void expr_type() { }
 
-        public void parse_expr_type(ref CType type)
+        public void parse_expr_type(CType type)
         {
         }
 
@@ -577,14 +645,15 @@ namespace TidePool
             int v;
             int has_init;
             int r;
-            CType type;
-            CType btype = null;
-            Sym sym;
-            AttributeDef ad = null;
+
+            CType type = new CType();
+            CType btype = new CType();
+            Sym sym = null;
+            AttributeDef ad = new AttributeDef();
 
             while (true)
             {
-                if (!parse_btype(ref btype, ref ad))
+                if (!parse_btype(btype, ad))
                 {
                     if (is_for_loop_init)
                         return 0;
@@ -861,6 +930,10 @@ namespace TidePool
         public int alias_target; /* token */
         public int asm_label; /* associated asm label */
         public char attr_mode; /* __attribute__((__mode__(...))) */
+
+        public void reset()
+        {
+        }
     }
 
     //-------------------------------------------------------------------------

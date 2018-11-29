@@ -218,8 +218,6 @@ namespace TidePool
 
         public const int TOK_IDENT = 256;
 
-        public int SYM_FIRST_ANOM = 0x10000000;                 /* first anonymous sym */
-
         public const int TOK_FLAG_BOL = 0x0001;		            /* beginning of line before */
         public const int TOK_FLAG_BOF = 0x0002;		            /* beginning of file before */
         public const int TOK_FLAG_ENDIF = 0x0004;		        /* a endif was found matching starting #ifdef */
@@ -243,9 +241,29 @@ namespace TidePool
         public const int IS_ID = 2;
         public const int IS_NUM = 4;
 
-        public string[] tcc_keywords = { "int", "void", "char", "if", "else", "while", "break",
-                "return", "for", "extern", "static", "unsigned", "goto", "do", "continue", "switch", "case"};
-
+        public string[] tcc_keywords = { "int", "void", "char", "if", "else", "while", "break", "return", 
+                                         "for", "extern", "static", "unsigned", "goto", "do", "continue", "switch", "case",
+                                         "const", "__const", "__const__", "volatile", "__volatile", "__volatile__",
+                                         "long", "register", "signed", "__signed", "__signed__",
+                                         "auto", "inline", "__inline", "__inline__",
+                                         "restrict", "__restrict", "__restrict__", "__extension__", "_Generic",
+                                         "float", "double", "_Bool", "short",
+                                         "struct", "union", "typedef", "default", "enum", "sizeof",
+                                         "__attribute", "__attribute__", "__alignof", "__alignof__",
+                                         "typeof", "__typeof", "__typeof__", "__label__", "asm", "__asm", "__asm__",
+                                         "define", "include", "include_next", "ifdef", "ifndef", "elif", "endif", "defined", "undef",
+                                         "error", "warning", "line", "pragma", 
+                                         "__LINE__", "__FILE__", "__DATE__", "__TIME__", "__FUNCTION__", "__VA_ARGS__", "__COUNTER__",
+                                         "__func__", "__nan__", "__snan__", "__inf__",
+                                         "section", "__section__", "aligned", "__aligned__", "packed", "__packed__",
+                                         "weak", "__weak__", "alias", "__alias__", "unused", "__unused__", "cdecl", "__cdecl", "__cdecl__",
+                                         "stdcall", "__stdcall", "__stdcall__", "fastcall", "__fastcall", "__fastcall__", "regparm", "__regparm__",
+                                         "__mode__", "__QI__", "__DI__", "__HI__", "__SI__", "__word__",
+                                         "dllexport", "dllimport", "noreturn", "__noreturn__", "visibility", "__visibility__",
+                                         "__builtin_types_compatible_p", "__builtin_choose_expr", "__builtin_constant_p",
+                                         "__builtin_frame_address", "__builtin_return_address", "__builtin_expect",
+                                         "pack", "comment", "lib", "push_macro", "pop_macro", "once", "option"
+                                       };
 
         //---------------------------------------------------------------------
 
@@ -326,7 +344,7 @@ namespace TidePool
             TokenSym ts;
             int i;
 
-            if (tok_ident >= SYM_FIRST_ANOM)
+            if (tok_ident >= Compiler.SYM_FIRST_ANOM)
             {
                 tp.tp_error("memory full (symbols)");
             }
@@ -977,9 +995,9 @@ namespace TidePool
     public class TokenSym
     {
         public Sym sym_define; 	        /* direct pointer to define */
-        public Sym sym_label; 	            /* direct pointer to label */
+        public Sym sym_label; 	        /* direct pointer to label */
         public Sym sym_struct; 	        /* direct pointer to structure */
-        public Sym sym_identifier;         /* direct pointer to identifier */
+        public Sym sym_identifier;      /* direct pointer to identifier */
 
         public int tok; 			                /* token number */
         public int len;
