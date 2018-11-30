@@ -46,6 +46,7 @@
     <Compile Include="Compiler.cs" />
     <Compile Include="Options.cs" />
     <Compile Include="Preprocessor.cs" />
+    <Compile Include="Section.cs" />
     <Compile Include="TidePool.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

@@ -245,6 +245,7 @@ namespace TidePool
 
         public TidePool()
         {
+            Section.initSection(this);
             prep = new Preprocessor(this);
             comp = new Compiler(this);
 

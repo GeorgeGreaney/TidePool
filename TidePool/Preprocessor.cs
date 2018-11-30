@@ -25,7 +25,28 @@ namespace TidePool
 {
     public enum TPTOKEN
     {
-        TOK_TWODOTS = 0xa8,         /* C++ token ? */
+        TOK_ULT = 0x92,
+        TOK_UGE = 0x93,
+        TOK_EQ = 0x94,
+        TOK_NE = 0x95,
+        TOK_ULE = 0x96,
+        TOK_UGT = 0x97,
+        TOK_Nset = 0x98,
+        TOK_Nclear = 0x99,
+        TOK_LT = 0x9c,
+        TOK_GE = 0x9d,
+        TOK_LE = 0x9e,
+        TOK_GT = 0x9f,
+
+        TOK_LAND = 0xa0,
+        TOK_LOR = 0xa1,
+        TOK_DEC = 0xa2,
+        TOK_MID = 0xa3,/* inc/dec, to void constant */
+        TOK_INC = 0xa4,
+        TOK_UDIV = 0xb0,/* unsigned division */
+        TOK_UMOD = 0xb1, /* unsigned modulo */
+        TOK_PDIV = 0xb2, /* fast division with undefined rounding for pointers */
+
         TOK_CCHAR = 0xb3,           /* char constant in tokc */
         TOK_LCHAR = 0xb4,
         TOK_CINT = 0xb5,            /* number in tokc */
@@ -40,10 +61,42 @@ namespace TidePool
         TOK_PPNUM = 0xbe,           /* preprocessor number */
         TOK_PPSTR = 0xbf,           /* preprocessor string */
         TOK_LINENUM = 0xc0,         /* line number info */
+        TOK_TWODOTS = 0xa8,         /* C++ token ? */
 
-        TOK_LAST = Preprocessor.TOK_IDENT - 1,
+        TOK_UMULL = 0xc2, /* unsigned 32x32 -> 64 mul */
+        TOK_ADDC1 = 0xc3, /* add with carry generation */
+        TOK_ADDC2 = 0xc4, /* add with carry use */
+        TOK_SUBC1 = 0xc5, /* add with carry generation */
+        TOK_SUBC2 = 0xc6, /* add with carry use */
+        TOK_ARROW = 0xc7,
+        TOK_DOTS = 0xc8, /* three dots */
+        TOK_SHR = 0xc9, /* unsigned shift right */
+        TOK_TWOSHARPS = 0xca, /* ## preprocessing token */
+        TOK_PLCHLDR = 0xcb, /* placeholder token as defined in C99 */
+        TOK_NOSUBST = 0xcc, /* means following token has already been pp'd */
+        TOK_PPJOIN = 0xcd, /* A '##' in the right position to mean pasting */
+        TOK_CLONG = 0xce, /* long constant */
+        TOK_CULONG = 0xcf, /* unsigned long constant */
 
-        TOK_INT,
+        /* assignment operators : normal operator or 0x80 */
+        TOK_A_MOD = 0xa5,
+        TOK_A_AND = 0xa6,
+        TOK_A_MUL = 0xaa,
+        TOK_A_ADD = 0xab,
+        TOK_A_SUB = 0xad,
+        TOK_A_DIV = 0xaf,
+        TOK_A_XOR = 0xde,
+        TOK_A_OR = 0xfc,
+        TOK_A_SHL = 0x81,
+        TOK_A_SAR = 0x82,
+
+        TOK_EOF = -1,
+        TOK_LINEFEED = 10,             /* line feed */
+
+        TOK_LAST = 255,
+        TOK_IDENT = 256,
+
+        TOK_INT = 256,
         TOK_VOID,
         TOK_CHAR,
         TOK_IF,
@@ -196,8 +249,6 @@ namespace TidePool
 
     public class Preprocessor
     {
-        public const int TOK_EOF = -1;
-        public const int TOK_LINEFEED = 10;             /* line feed */
 
         public TidePool tp;
 
@@ -207,6 +258,7 @@ namespace TidePool
         public BufferedFile curFile;
         public int ch;
         public int tok;
+        public CValue tokc;
         public int macro_ptr;
         public String tokcstr;					/* current parsed string, if any */
 
@@ -216,7 +268,6 @@ namespace TidePool
         public int tok_ident;
         public List<TokenSym> table_ident;
 
-        public const int TOK_IDENT = 256;
 
         public const int TOK_FLAG_BOL = 0x0001;		            /* beginning of line before */
         public const int TOK_FLAG_BOF = 0x0002;		            /* beginning of file before */
@@ -271,6 +322,7 @@ namespace TidePool
         {
             tp = _tp;
 
+            tokc = new CValue();
             macro_ptr = 0;
 
             table_ident = new List<TokenSym>();
@@ -278,7 +330,7 @@ namespace TidePool
             hash_ident = new List<TokenSym>[TOK_HASH_SIZE];
 
             //add keywords to symbol tbl
-            tok_ident = TOK_IDENT;
+            tok_ident = (int)TPTOKEN.TOK_IDENT;
             foreach (String keystr in tcc_keywords)
             {
                 tok_alloc(keystr, keystr.Length);      //add keyword to sym tbl
@@ -295,8 +347,6 @@ namespace TidePool
 
             for (int i = 128; i < 256; i++)
                 set_idnum(i, IS_ID);
-
-
         }
 
         public bool is_space(int ch)
@@ -324,8 +374,17 @@ namespace TidePool
             return (c >= 'a' && c <= 'z') ? (char)((int)c - 'a' + 'A') : c;
         }
 
-        public void skip() { }
-        public void expect() { }
+        public void skip(int c)
+        {
+            if (tok != c)
+                tp.tp_error("'{0}' expected (got \"{1}\")", c.ToString(), get_tok_str(tok, tokc));
+            next();
+        }
+
+        public void expect(string msg) 
+        {
+            tp.tp_error("{0} expected", msg);
+        }
 
         public void cstr_realloc() { }
         public void cstr_ccat() { }
@@ -349,10 +408,10 @@ namespace TidePool
                 tp.tp_error("memory full (symbols)");
             }
 
-            i = tok_ident - TOK_IDENT;
-            ts = new TokenSym(idstr, len);          //alloc new token rec
-            table_ident.Add(ts);					//and store in ident tbl
-            ts.tok = tok_ident++;					//token num is ident tbl idx
+            i = tok_ident - (int)TPTOKEN.TOK_IDENT;
+            ts = new TokenSym(idstr, len);              //alloc new token rec
+            table_ident.Add(ts);					    //and store in ident tbl
+            ts.tok = tok_ident++;					    //token num is ident tbl idx
 
             List<TokenSym> pts = hash_ident[hash];
             if (pts == null)
@@ -401,9 +460,135 @@ namespace TidePool
             return tok_alloc_new(h, idstr, len);
         }
 
-        public string get_tok_str(int tok)
+        /* XXX: buffer overflow */
+        /* XXX: float tokens */
+        public string get_tok_str(int v, CValue cv)
         {
-            return "foo";
+            string p = "";
+
+            switch ((TPTOKEN)v)
+            {
+                case TPTOKEN.TOK_CINT:
+                case TPTOKEN.TOK_CUINT:
+                case TPTOKEN.TOK_CLONG:
+                case TPTOKEN.TOK_CULONG:
+                case TPTOKEN.TOK_CLLONG:
+                case TPTOKEN.TOK_CULLONG:
+                    /* XXX: not quite exact, but only useful for testing  */
+                    p = string.Format("{0}", cv.i);
+                    break;
+
+                case TPTOKEN.TOK_LCHAR:
+                case TPTOKEN.TOK_CCHAR:
+                    p = "\'" + (char)cv.i + "\'";
+                    if (v == (int)TPTOKEN.TOK_LCHAR)
+                    {
+                        p = "L" + p;
+                    }
+                    break;
+
+                case TPTOKEN.TOK_PPNUM:
+                case TPTOKEN.TOK_PPSTR:
+                    return cv.str;
+
+                case TPTOKEN.TOK_LSTR:
+                case TPTOKEN.TOK_STR:
+                    if (v == (int)TPTOKEN.TOK_STR)
+                    {
+                        p = "\'" + cv.str;
+                    }
+                    else
+                    {
+                        p = "L\'";
+                        //            len = (cv->str.size / sizeof(nwchar_t)) - 1;
+                        //            for(i=0;i<len;i++)
+                        //                add_char(&cstr_buf, ((nwchar_t *)cv->str.data)[i]);
+                    }
+                    p = p + "\'";
+                    break;
+
+                case TPTOKEN.TOK_CFLOAT:
+                    p = "<float>";
+                    break;
+
+                case TPTOKEN.TOK_CDOUBLE:
+                    p = "<double>";
+                    break;
+
+                case TPTOKEN.TOK_CLDOUBLE:
+                    p = "<long double>";
+                    break;
+
+                case TPTOKEN.TOK_LINENUM:
+                    p = "<linenumber>";
+                    break;
+
+                /* above tokens have value, the ones below don't */
+                case TPTOKEN.TOK_LT:
+                    p = "<";
+                    break;
+
+                case TPTOKEN.TOK_GT:
+                    p = ">";
+                    break;
+
+                case TPTOKEN.TOK_DOTS:
+                    return "...";
+
+                case TPTOKEN.TOK_A_SHL:
+                    return "<<=";
+
+                case TPTOKEN.TOK_A_SAR:
+                    return ">>=";
+
+                case TPTOKEN.TOK_EOF:
+                    return "<eof>";
+
+                default:
+                    if (v < (int)TPTOKEN.TOK_IDENT)
+                    {
+                        /* search in two bytes table */
+                        //            const unsigned char *q = tok_two_chars;
+                        //            while (*q) {
+                        //                if (q[2] == v) {
+                        //                    *p++ = q[0];
+                        //                    *p++ = q[1];
+                        //                    *p = '\0';
+                        //                    return cstr_buf.data;
+                        //                }
+                        //                q += 3;
+                        //            }
+                        if (v >= 127)
+                        {
+                            return string.Format("<{0}>", v.ToString("X2"));
+                        }
+                        if (v >= 0x20)
+                        {
+                            p = ((char)v).ToString();
+                        }
+                        else
+                        {
+                            p = v.ToString();
+                        }
+                    }
+                    else if (v < tok_ident)
+                    {
+                        return table_ident[(v - (int)TPTOKEN.TOK_IDENT)].str;
+                    }
+                    else if (v >= Compiler.SYM_FIRST_ANOM)
+                    {
+                        /* special name for anonymous symbol */
+                        p = string.Format("L.{0}", (v - Compiler.SYM_FIRST_ANOM));
+                    }
+                    else
+                    {
+                        /* should never happen */
+                        return null;
+                    }
+                    break;
+            }
+
+            return p;
         }
 
         public int handle_eob()
@@ -580,15 +765,15 @@ namespace TidePool
                     //            TCCState *s1 = tcc_state;
                                 if (((parseFlags & PARSE_FLAG_LINEFEED) != 0) && !((tokenFlags & TOK_FLAG_EOF) != 0)) {
                                     tokenFlags |= TOK_FLAG_EOF;
-                                    tok = TOK_LINEFEED;
+                                    tok = (int)TPTOKEN.TOK_LINEFEED;
                                     goto keep_tok_flags;
                                 } else if (!((parseFlags & PARSE_FLAG_PREPROCESS) != 0)) {
-                                    tok = TOK_EOF;
+                                    tok = (int)TPTOKEN.TOK_EOF;
                                 } else if (tp.ifdef_stack_ptr != 0) {
                                     tp.tp_error("missing #endif");
                                 } else if (tp.include_stack_ptr == 0) {
                                     /* no include left : end of file. */
-                                    tok = TOK_EOF;
+                                    tok = (int)TPTOKEN.TOK_EOF;
                                 } else {
                                     tokenFlags &= ~TOK_FLAG_EOF;
                                     /* pop include file */
@@ -625,7 +810,7 @@ namespace TidePool
                 maybe_newline:
                     if ((parseFlags & PARSE_FLAG_LINEFEED) == 0)
                         goto redo_no_start;
-                    tok = TOK_LINEFEED;
+                    tok = (int)TPTOKEN.TOK_LINEFEED;
                     goto keep_tok_flags;
 
                 case '#':
@@ -774,6 +959,7 @@ namespace TidePool
                     }
                     /* We add a trailing '\0' to ease parsing */
                     tokcstr += '\0';
+                    tokc.str = tokcstr;             //set const data
                     tok = (int)TPTOKEN.TOK_PPNUM;
                     break;
 
@@ -824,7 +1010,7 @@ namespace TidePool
         keep_tok_flags:
             curFile.buf_ptr = p;			//update pos buf
 
-            Console.Out.WriteLine("token = {0} {1}", tok.ToString("X2"), get_tok_str(tok)); //, tokc));
+            Console.Out.WriteLine("token = {0} {1}", tok.ToString("X2"), get_tok_str(tok, tokc));
         }
 
         public void next_nomacro_spc()
@@ -941,7 +1127,7 @@ namespace TidePool
             while (true)
             {
                 next();
-                if (tok == TOK_EOF)
+                if (tok == (int)TPTOKEN.TOK_EOF)
                     break;
             }
         }
@@ -1016,6 +1202,17 @@ namespace TidePool
         }
     }
 
+    //-------------------------------------------------------------------------
+
+    public class CValue
+    {
+        public double ld;
+        public double d;
+        public float f;
+        public int i;
+        public string str;
+        public int[] tab;
+    }
 }
 
 //Console.Out.WriteLine("There's no sun in the shadow of the wizard");

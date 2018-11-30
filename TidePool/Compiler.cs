@@ -29,25 +29,35 @@ namespace TidePool
 
         public const int LONG_SIZE = 4;
 
-        public int SYM_STRUCT = 0x40000000;         /* struct/union/enum symbol space */
-        public int SYM_FIELD = 0x20000000;          /* struct/union field symbol space */
-        public int SYM_FIRST_ANOM = 0x10000000;     /* first anonymous sym */
+        public const int SYM_STRUCT = 0x40000000;         /* struct/union/enum symbol space */
+        public const int SYM_FIELD = 0x20000000;          /* struct/union field symbol space */
+        public const int SYM_FIRST_ANOM = 0x10000000;     /* first anonymous sym */
 
-        public const int VT_VALMASK = 0x003f;  /* mask for value location, register or: */
-        public const int VT_CONST = 0x0030;  /* constant in vc (must be first non register value) */
-        public const int VT_LLOCAL = 0x0031;  /* lvalue, offset on stack */
-        public const int VT_LOCAL = 0x0032;  /* offset on stack */
-        public const int VT_CMP = 0x0033;  /* the value is stored in processor flags (in vc) */
-        public const int VT_JMP = 0x0034;  /* value is the consequence of jmp true (even) */
-        public const int VT_JMPI = 0x0035;  /* value is the consequence of jmp false (odd) */
-        public const int VT_LVAL = 0x0100;  /* var is an lvalue */
-        public const int VT_SYM = 0x0200;  /* a symbol value is added */
-        public const int VT_MUSTCAST = 0x0400;  /* value must be casted to be correct (used for char/short stored in integer registers) */
-        public const int VT_MUSTBOUND = 0x0800;  /* bound checking must be done before dereferencing value */
-        public const int VT_BOUNDED = 0x8000; /* value is bounded. The address of the bounding function call point is in vc */
-        public const int VT_LVAL_BYTE = 0x1000;  /* lvalue is a byte */
-        public const int VT_LVAL_SHORT = 0x2000;  /* lvalue is a short */
-        public const int VT_LVAL_UNSIGNED = 0x4000;  /* lvalue is unsigned */
+        /* stored in 'Sym->f.func_type' field */
+        public const int FUNC_NEW = 1;                    /* ansi function prototype */
+        public const int FUNC_OLD = 2;                    /* old function prototype */
+        public const int FUNC_ELLIPSIS = 3;               /* ansi function prototype with ... */
+
+        /* type_decl() types */
+        public const int TYPE_ABSTRACT = 1; /* type without variable */
+        public const int TYPE_DIRECT = 2; /* type with variable */
+
+        public const int VT_VALMASK = 0x003f;       /* mask for value location, register or: */
+        public const int VT_CONST = 0x0030;         /* constant in vc (must be first non register value) */
+        public const int VT_LLOCAL = 0x0031;        /* lvalue, offset on stack */
+        public const int VT_LOCAL = 0x0032;         /* offset on stack */
+        public const int VT_CMP = 0x0033;           /* the value is stored in processor flags (in vc) */
+        public const int VT_JMP = 0x0034;           /* value is the consequence of jmp true (even) */
+        public const int VT_JMPI = 0x0035;          /* value is the consequence of jmp false (odd) */
+        public const int VT_LVAL = 0x0100;          /* var is an lvalue */
+        public const int VT_SYM = 0x0200;           /* a symbol value is added */
+        public const int VT_MUSTCAST = 0x0400;      /* value must be casted to be correct (used for char/short stored in integer registers) */
+        public const int VT_MUSTBOUND = 0x0800;     /* bound checking must be done before dereferencing value */
+        public const int VT_BOUNDED = 0x8000;       /* value is bounded. The address of the bounding function call point is in vc */
+        public const int VT_LVAL_BYTE = 0x1000;     /* lvalue is a byte */
+        public const int VT_LVAL_SHORT = 0x2000;    /* lvalue is a short */
+        public const int VT_LVAL_UNSIGNED = 0x4000; /* lvalue is unsigned */
+
         public const int VT_LVAL_TYPE = (VT_LVAL_BYTE | VT_LVAL_SHORT | VT_LVAL_UNSIGNED);
 
         /* types */
@@ -103,7 +113,6 @@ namespace TidePool
         public int in_sizeof;
         public int section_sym;
 
-
         public Compiler(TidePool _tp)
         {
             tp = _tp;
@@ -125,7 +134,8 @@ namespace TidePool
         public void tp_compile()
         {
             prep = tp.prep;
-            //            cur_text_section = NULL;
+
+            Section.curTextSection = null;
             //funcname = "";
             //anon_sym = SYM_FIRST_ANOM;
             //section_sym = 0;
@@ -162,14 +172,58 @@ namespace TidePool
             decl(VT_CONST);
             //    gen_inline_functions(s1);
             //    check_vstack();
-            //    /* end of translation unit info */
+
+            /* end of translation unit info */
             //    tcc_debug_end(s1);
             //    return 0;
 
         }
 
         public void elfsym() { }
-        public void update_storage() { }
+
+        public void update_storage(Sym sym)
+        {
+            //ElfSym esym;
+            //int sym_bind;
+            //int old_sym_bind;
+
+            //esym = elfsym(sym);
+            //if (esym == null)
+            return;
+
+            //    if (sym->a.visibility)
+            //        esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
+            //            | sym->a.visibility;
+
+            //    if (sym->type.t & VT_STATIC)
+            //        sym_bind = STB_LOCAL;
+            //    else if (sym->a.weak)
+            //        sym_bind = STB_WEAK;
+            //    else
+            //        sym_bind = STB_GLOBAL;
+            //    old_sym_bind = ELFW(ST_BIND)(esym->st_info);
+            //    if (sym_bind != old_sym_bind) {
+            //        esym->st_info = ELFW(ST_INFO)(sym_bind, ELFW(ST_TYPE)(esym->st_info));
+            //    }
+
+            //#ifdef TCC_TARGET_PE
+            //    if (sym->a.dllimport)
+            //        esym->st_other |= ST_PE_IMPORT;
+            //    if (sym->a.dllexport)
+            //        esym->st_other |= ST_PE_EXPORT;
+            //#endif
+
+            //#if 0
+            //    printf("storage %s: bind=%c vis=%d exp=%d imp=%d\n",
+            //        get_tok_str(sym->v, NULL),
+            //        sym_bind == STB_WEAK ? 'w' : sym_bind == STB_LOCAL ? 'l' : 'g',
+            //        sym->a.visibility,
+            //        sym->a.dllexport,
+            //        sym->a.dllimport
+            //        );
+            //#endif
+
+        }
         public void put_extern_sym2() { }
         public void put_extern_sym() { }
         public void greloca() { }
@@ -195,49 +249,69 @@ namespace TidePool
 
         public Sym sym_find(int v)
         {
-            if ((v < Preprocessor.TOK_IDENT) || (v > prep.tok_ident))
+            if ((v < (int)TPTOKEN.TOK_IDENT) || (v > prep.tok_ident))
                 return null;
 
             //v -= TOK_IDENT;
             //if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
             //    return NULL;
-            return prep.table_ident[v].sym_identifier;
+            return prep.table_ident[(v - (int)TPTOKEN.TOK_IDENT)].sym_identifier;
         }
 
         public Sym sym_push(int v, CType type, int r, int c)
-        { 
-                Sym s; 
+        {
+            Sym s;
             List<Sym> ps;
-    TokenSym ts;
+            TokenSym ts;
 
-    if (local_stack != null)
-        ps = local_stack;
-    else
-        ps = global_stack;
-    s = sym_push2(ps, v, type.t, c);
-    s.type.reff = type.reff;
-    s.r = r;
-    
-    /* don't record fields or anonymous symbols */
-    /* XXX: simplify */
-    if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
-        /* record symbol in token array */
-        ts = table_ident[(v & ~SYM_STRUCT) - TOK_IDENT];
-//        if (v & SYM_STRUCT)
-//            ps = &ts->sym_struct;
-//        else
-//            ps = &ts->sym_identifier;
-//        s->prev_tok = *ps;
-//        *ps = s;
-//        s->sym_scope = local_scope;
-//        if (s->prev_tok && s->prev_tok->sym_scope == s->sym_scope)
-//            tcc_error("redeclaration of '%s'",
-//                get_tok_str(v & ~SYM_STRUCT, NULL));
-    }
-    return s;
+            if (local_stack != null)
+                ps = local_stack;
+            else
+                ps = global_stack;
+
+            s = sym_push2(ps, v, type.t, c);
+            s.type.reff = type.reff;
+            s.r = (short)r;
+
+            /* don't record fields or anonymous symbols */
+            /* XXX: simplify */
+            if (!((v & SYM_FIELD) != 0) && ((v & ~SYM_STRUCT) < SYM_FIRST_ANOM))
+            {
+                /* record symbol in token array */
+                //      ts = table_ident[(v & ~SYM_STRUCT) - TOK_IDENT];
+                //        if (v & SYM_STRUCT)
+                //            ps = &ts->sym_struct;
+                //        else
+                //            ps = &ts->sym_identifier;
+                //        s->prev_tok = *ps;
+                //        *ps = s;
+                //        s->sym_scope = local_scope;
+                //        if (s->prev_tok && s->prev_tok->sym_scope == s->sym_scope)
+                //            tcc_error("redeclaration of '%s'",
+                //                get_tok_str(v & ~SYM_STRUCT, NULL));
+            }
+            return s;
         }
 
-        public void global_identifier_push() { }
+        public Sym global_identifier_push(int v, int t, int c)
+        {
+            Sym s = sym_push2(global_stack, v, t, c);
+
+            /* don't record anonymous symbol */
+            if (v < SYM_FIRST_ANOM)
+            {
+                Sym ps = prep.table_ident[v - (int)TPTOKEN.TOK_IDENT].sym_identifier;
+
+                /* modify the top most local identifier, so that sym_identifier will point to 's' when popped */
+                while ((ps != null) && (ps.sym_scope != 0))
+                    ps = ps.prev_tok;
+                s.prev_tok = ps;
+                prep.table_ident[v - (int)TPTOKEN.TOK_IDENT].sym_identifier = s;
+            }
+
+            return s;
+        }
+
         public void sym_pop() { }
         public void vsetc() { }
         public void vswap() { }
@@ -257,9 +331,106 @@ namespace TidePool
         public void vpushsym() { }
         public void get_sym_ref() { }
         public void vpush_ref() { }
-        public void external_global_sym() { }
-        public void patch_type() { }
-        public void patch_storage() { }
+
+        public Sym external_global_sym(int v, CType type, int r)
+        {
+            Sym s = sym_find(v);
+
+            if (s == null)
+            {
+                /* push forward reference */
+                s = global_identifier_push(v, (type.t | VT_EXTERN), 0);
+                s.type.reff = type.reff;
+                s.r = (short)(r | VT_CONST | VT_SYM);
+                //} else if (IS_ASM_SYM(s)) {
+                //    s->type.t = type->t | (s->type.t & VT_EXTERN);
+                //    s->type.ref = type->ref;
+                //    update_storage(s);
+            }
+            return s;
+        }
+
+        /* Merge some type attributes.  */
+        public void patch_type(Sym sym, CType type)
+        {
+            if (!((type.t & VT_EXTERN) != 0))
+            {
+                if (!((sym.type.t & VT_EXTERN) != 0))
+                    tp.tp_error("redefinition of '{0}'", prep.get_tok_str(sym.v, null));
+                sym.type.t &= ~VT_EXTERN;
+            }
+
+            //if (IS_ASM_SYM(sym)) {
+            //    /* stay static if both are static */
+            //    sym->type.t = type->t & (sym->type.t | ~VT_STATIC);
+            //    sym->type.ref = type->ref;
+            //}
+
+            if (!is_compatible_types(sym.type, type))
+            {
+                tp.tp_error("incompatible types for redefinition of '{0}'", prep.get_tok_str(sym.v, null));
+
+            }
+            else if ((sym.type.t & VT_BTYPE) == VT_FUNC)
+            {
+                int static_proto = sym.type.t & VT_STATIC;
+                /* warn if static follows non-static function declaration */
+                //    if ((type->t & VT_STATIC) && !static_proto && !(type->t & VT_INLINE))
+                //        tcc_warning("static storage ignored for redefinition of '%s'",
+                //        get_tok_str(sym->v, NULL));
+
+                if (0 == (type.t & VT_EXTERN))
+                {
+                    /* put complete type, use static from prototype */
+                    sym.type.t = (type.t & ~VT_STATIC) | static_proto;
+                    //        if (type->t & VT_INLINE)
+                    //            sym->type.t = type->t;
+                    sym.type.reff = type.reff;
+                }
+
+            }
+            else
+            {
+                //    if ((sym->type.t & VT_ARRAY) && type->ref->c >= 0) {
+                //        /* set array size if it was omitted in extern declaration */
+                //        if (sym->type.ref->c < 0)
+                //            sym->type.ref->c = type->ref->c;
+                //        else if (sym->type.ref->c != type->ref->c)
+                //            tcc_error("conflicting type for '%s'", get_tok_str(sym->v, NULL));
+                //    }
+                //    if ((type->t ^ sym->type.t) & VT_STATIC)
+                //        tcc_warning("storage mismatch for redefinition of '%s'",
+                //        get_tok_str(sym->v, NULL));
+            }
+        }
+
+        /* Merge some storage attributes.  */
+        public void patch_storage(Sym sym, AttributeDef ad, CType type)
+        {
+            if (type != null)
+                patch_type(sym, type);
+
+            if (sym.a.dllimport != ad.a.dllimport)
+                tp.tp_error("incompatible dll linkage for redefinition of '{0}'", prep.get_tok_str(sym.v, null));
+            sym.a.dllexport |= ad.a.dllexport;
+
+            sym.a.weak |= ad.a.weak;
+            //if (ad.a.visibility) {
+            //    int vis = sym->a.visibility;
+            //    int vis2 = ad->a.visibility;
+            //    if (vis == STV_DEFAULT)
+            //        vis = vis2;
+            //    else if (vis2 != STV_DEFAULT)
+            //        vis = (vis < vis2) ? vis : vis2;
+            //    sym->a.visibility = vis;
+            //}
+            //if (ad->a.aligned)
+            //    sym->a.aligned = ad->a.aligned;
+            //if (ad->asm_label)
+            //    sym->asm_label = ad->asm_label;
+            update_storage(sym);
+        }
+
         public void external_sym() { }
         public void vpush_global_sym() { }
         public void save_regs() { }
@@ -304,8 +475,17 @@ namespace TidePool
         public void pointed_type() { }
         public void mk_pointer() { }
         public void is_compatible_func() { }
-        public void compare_types() { }
-        public void is_compatible_types() { }
+
+        public bool compare_types(CType type1, CType type2, int unqualified)
+        {
+            return true;
+        }
+
+        public bool is_compatible_types(CType type1, CType type2)
+        {
+            return compare_types(type1, type2, 0);
+        }
+
         public void is_compatible_unqualified_types() { }
         public void type_to_str() { }
         public void gen_assign_cast() { }
@@ -435,7 +615,7 @@ namespace TidePool
                         prep.next();
                         break;
 
-                        //structured typed
+                    //structured typed
                     case TPTOKEN.TOK_ENUM:
                         struct_decl(type1, VT_ENUM);
                     basic_type2:
@@ -549,7 +729,7 @@ namespace TidePool
                             goto the_end;
 
                         s = sym_find(prep.tok);
-                        if (s != null || !((s.type.t & VT_TYPEDEF) != 0))
+                        if (s == null || !((s.type.t & VT_TYPEDEF) != 0))
                             goto the_end;
 
                         t &= ~(VT_BTYPE | VT_LONG);
@@ -573,28 +753,260 @@ namespace TidePool
             }
 
         the_end:
-                if (tp.char_is_unsigned) {
-                    if ((t & (VT_DEFSIGN|VT_BTYPE)) == VT_BYTE)
-                        t |= VT_UNSIGNED;
-                }
+            if (tp.char_is_unsigned)
+            {
+                if ((t & (VT_DEFSIGN | VT_BTYPE)) == VT_BYTE)
+                    t |= VT_UNSIGNED;
+            }
 
             /* VT_LONG is used just as a modifier for VT_INT / VT_LLONG */
-                bt = t & (VT_BTYPE|VT_LONG);
-                if (bt == VT_LONG)
-                    t |= LONG_SIZE == 8 ? VT_LLONG : VT_INT;
+            bt = t & (VT_BTYPE | VT_LONG);
+            if (bt == VT_LONG)
+                t |= LONG_SIZE == 8 ? VT_LLONG : VT_INT;
 
-                if (bt == VT_LDOUBLE)
-                    t = (t & ~(VT_BTYPE|VT_LONG)) | VT_DOUBLE;
+            if (bt == VT_LDOUBLE)
+                t = (t & ~(VT_BTYPE | VT_LONG)) | VT_DOUBLE;
 
-                type.t = t;
+            type.t = t;
             return type_found;
         }
 
         public void convert_parameter_type() { }
         public void parse_asm_str() { }
         public void asm_label_instr() { }
-        public void post_type() { }
-        public void type_decl() { }
+
+        public int post_type(CType type, AttributeDef ad, int storage, int td)
+        {
+            int n;
+            int l = 0;
+            int t1;
+            int arg_size;
+            int align;
+            //Sym **plast,  
+            Sym first;
+            Sym s;
+            AttributeDef ad1;
+            CType pt;
+
+            if (prep.tok == '(')
+            {
+                /* function type, or recursive declarator (return if so) */
+                prep.next();
+                if ((td != 0) && !((td & TYPE_ABSTRACT) != 0))
+                    return 0;
+                if (prep.tok == ')')
+                    l = 0;								//empty param list
+                //else if (parse_btype(&pt, &ad1))
+                //  l = FUNC_NEW;
+                //else if (td)
+                //  return 0;
+                //else
+                //  l = FUNC_OLD;
+
+                first = null;
+                //plast = &first;
+                arg_size = 0;
+                if (l > 0)
+                {
+                    for (; ; )
+                    {
+                        //                /* read param name and compute offset */
+                        //                if (l != FUNC_OLD) {
+                        //                    if ((pt.t & VT_BTYPE) == VT_VOID && tok == ')')
+                        //                        break;
+                        //                    type_decl(&pt, &ad1, &n, TYPE_DIRECT | TYPE_ABSTRACT);
+                        //                    if ((pt.t & VT_BTYPE) == VT_VOID)
+                        //                        tcc_error("parameter declared as void");
+                        //                    arg_size += (type_size(&pt, &align) + PTR_SIZE - 1) / PTR_SIZE;
+                        //                } else {
+                        //                    n = tok;
+                        //                    if (n < TOK_UIDENT)
+                        //                        expect("identifier");
+                        //                    pt.t = VT_VOID; /* invalid type */
+                        //                    next();
+                        //                }
+                        //                convert_parameter_type(&pt);
+                        //                s = sym_push(n | SYM_FIELD, &pt, 0, 0);
+                        //                *plast = s;
+                        //                plast = &s->next;
+                        //                if (tok == ')')
+                        //                    break;
+                        //                skip(',');
+                        //                if (l == FUNC_NEW && tok == TOK_DOTS) {
+                        //                    l = FUNC_ELLIPSIS;
+                        //                    next();
+                        //                    break;
+                        //                }
+                        //		if (l == FUNC_NEW && !parse_btype(&pt, &ad1))
+                        //		    tcc_error("invalid type");
+                    }
+                }
+                else
+                    /* if no parameters, then old type prototype */
+                    l = FUNC_OLD;
+
+                prep.skip(')');		//closing paren
+
+                /* NOTE: const is ignored in returned type as it has a special meaning in gcc / C++ */
+                //        type->t &= ~VT_CONSTANT; 
+                //        /* some ancient pre-K&R C allows a function to return an array
+                //           and the array brackets to be put after the arguments, such 
+                //           that "int c()[]" means something like "int[] c()" */
+                //        if (tok == '[') {
+                //            next();
+                //            skip(']'); /* only handle simple "[]" */
+                //            mk_pointer(type);
+                //        }
+
+                /* we push a anonymous symbol which will contain the function prototype */
+                ad.f.func_args = arg_size;
+                ad.f.func_type = l;
+                s = sym_push(SYM_FIELD, type, 0, 0);
+                s.a = ad.a;
+                s.f = ad.f;
+                s.next = first;
+                type.t = VT_FUNC;
+                type.reff = s;
+            }
+
+            else if (prep.tok == '[')
+            {
+                //	int saved_nocode_wanted = nocode_wanted;
+                //        /* array definition */
+                //        next();
+                //        if (tok == TOK_RESTRICT1)
+                //            next();
+                //        n = -1;
+                //        t1 = 0;
+                //        if (tok != ']') {
+                //            if (!local_stack || (storage & VT_STATIC))
+                //                vpushi(expr_const());
+                //            else {
+                //		/* VLAs (which can only happen with local_stack && !VT_STATIC)
+                //		   length must always be evaluated, even under nocode_wanted,
+                //		   so that its size slot is initialized (e.g. under sizeof
+                //		   or typeof).  */
+                //		nocode_wanted = 0;
+                //		gexpr();
+                //	    }
+                //            if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+                //                n = vtop->c.i;
+                //                if (n < 0)
+                //                    tcc_error("invalid array size");
+                //            } else {
+                //                if (!is_integer_btype(vtop->type.t & VT_BTYPE))
+                //                    tcc_error("size of variable length array should be an integer");
+                //                t1 = VT_VLA;
+                //            }
+                //        }
+                //        skip(']');
+                //        /* parse next post type */
+                //        post_type(type, ad, storage, 0);
+                //        if (type->t == VT_FUNC)
+                //            tcc_error("declaration of an array of functions");
+                //        t1 |= type->t & VT_VLA;
+                //        
+                //        if (t1 & VT_VLA) {
+                //            loc -= type_size(&int_type, &align);
+                //            loc &= -align;
+                //            n = loc;
+                //
+                //            vla_runtime_type_size(type, &align);
+                //            gen_op('*');
+                //            vset(&int_type, VT_LOCAL|VT_LVAL, n);
+                //            vswap();
+                //            vstore();
+                //        }
+                //        if (n != -1)
+                //            vpop();
+                //	nocode_wanted = saved_nocode_wanted;
+                //                
+                //        /* we push an anonymous symbol which will contain the array
+                //           element type */
+                //        s = sym_push(SYM_FIELD, type, 0, n);
+                //        type->t = (t1 ? VT_VLA : VT_ARRAY) | VT_PTR;
+                //        type->ref = s;
+            }
+
+            return 1;
+        }
+
+        public CType type_decl(CType type, AttributeDef ad, ref int v, int td)
+        {
+            CType post;
+            CType ret;
+            int qualifiers;
+            int storage;
+
+            /* recursive type, remove storage bits first, apply them later again */
+            storage = type.t & VT_STORAGE;
+            type.t &= ~VT_STORAGE;
+            post = ret = type;
+
+            while (prep.tok == '*')
+            {
+                //        qualifiers = 0;
+                //    redo:
+                //        next();
+                //        switch(tok) {
+                //        case TOK_CONST1:
+                //        case TOK_CONST2:
+                //        case TOK_CONST3:
+                //            qualifiers |= VT_CONSTANT;
+                //            goto redo;
+                //        case TOK_VOLATILE1:
+                //        case TOK_VOLATILE2:
+                //        case TOK_VOLATILE3:
+                //            qualifiers |= VT_VOLATILE;
+                //            goto redo;
+                //        case TOK_RESTRICT1:
+                //        case TOK_RESTRICT2:
+                //        case TOK_RESTRICT3:
+                //            goto redo;
+                //	/* XXX: clarify attribute handling */
+                //	case TOK_ATTRIBUTE1:
+                //	case TOK_ATTRIBUTE2:
+                //	    parse_attribute(ad);
+                //	    break;
+                //        }
+                //        mk_pointer(type);
+                //        type->t |= qualifiers;
+                //	if (ret == type)
+                //	    /* innermost pointed to type is the one for the first derivation */
+                //	    ret = pointed_type(type);
+            }
+
+            if (prep.tok == '(')
+            {
+                /* This is possibly a parameter type list for abstract declarators ('int ()'), use post_type for testing this.  */
+                //	if (!post_type(type, ad, 0, td)) {
+                //	    /* It's not, so it's a nested declarator, and the post operations
+                //	       apply to the innermost pointed to type (if any).  */
+                //	    /* XXX: this is not correct to modify 'ad' at this point, but
+                //	       the syntax is not clear */
+                //	    parse_attribute(ad);
+                //	    post = type_decl(type, ad, v, td);
+                //	    skip(')');
+                //	}
+            }
+            else if ((prep.tok >= (int)TPTOKEN.TOK_IDENT) && ((td & TYPE_DIRECT) != 0))
+            {
+                /* type identifier */
+                v = prep.tok;				//save function or var ident
+                prep.next();
+            }
+            else
+            {
+                //	if (!(td & TYPE_ABSTRACT))
+                //	  expect("identifier");
+                //	*v = 0;
+            }
+            post_type(post, ad, storage, 0);
+            parse_attribute(ad);
+            type.t |= storage;
+            return ret;
+        }
+
         public void lvalue_type() { }
         public void indir() { }
         public void gfunc_param_typed() { }
@@ -636,13 +1048,62 @@ namespace TidePool
         public void init_putv() { }
         public void decl_initializer() { }
         public void decl_initializer_alloc() { }
-        public void gen_function() { }
+
+        public void gen_function(Sym sym)
+        {
+            //    nocode_wanted = 0;
+            //    ind = curTextSection->data_offset;
+            
+            /* NOTE: we patch the symbol size later */
+            //    put_extern_sym(sym, curTextSection, ind, 0);
+            //    funcname = get_tok_str(sym->v, NULL);
+            //    func_ind = ind;
+            
+            /* Initialize VLA state */
+            //    vla_sp_loc = -1;
+            //    vla_sp_root_loc = -1;
+            
+            /* put debug symbol */
+            //    tcc_debug_funcstart(tcc_state, sym);
+            
+            /* push a dummy symbol to enable local sym storage */
+            //    sym_push2(&local_stack, SYM_FIELD, 0, 0);
+            //    local_scope = 1; /* for function parameters */
+            //    gfunc_prolog(&sym->type);
+            //    local_scope = 0;
+            //    rsym = 0;
+            //    block(NULL, NULL, 0);
+            //    nocode_wanted = 0;
+            //    gsym(rsym);
+            //    gfunc_epilog();
+            //    curTextSection->data_offset = ind;
+            //    label_pop(&global_label_stack, NULL, 0);
+            
+            /* reset local stack */
+            //    local_scope = 0;
+            //    sym_pop(&local_stack, NULL, 0);
+            
+            /* end of function */            
+            /* patch symbol size */
+            //    elfsym(sym)->st_size = ind - func_ind;
+            //    tcc_debug_funcend(tcc_state, ind - func_ind);
+
+            /* It's better to crash than to generate wrong code */
+            Section.curTextSection = null;
+            //    funcname = ""; /* for safety */
+            //    func_vt.t = VT_VOID; /* for safety */
+            //    func_var = 0; /* for safety */
+            //    ind = 0; /* for safety */
+            //    nocode_wanted = 0x80000000;
+            //    check_vstack();
+        }
+
         public void gen_inline_functions() { }
         public void free_inline_functions() { }
 
         public int decl0(int l, bool is_for_loop_init, Sym func_sym)
         {
-            int v;
+            int v = 0;
             int has_init;
             int r;
 
@@ -658,13 +1119,14 @@ namespace TidePool
                     if (is_for_loop_init)
                         return 0;
 
-                    //            /* skip redundant ';' if not in old parameter decl scope */
-                    //            if (tok == ';' && l != VT_CMP) {
-                    //                next();
-                    //                continue;
-                    //            }
-                    //            if (l != VT_CONST)
-                    //                break;
+                                /* skip redundant ';' if not in old parameter decl scope */
+                                if (prep.tok == ';' && l != VT_CMP) {
+                                    prep.next();
+                                    continue;
+                                }
+                                if (l != VT_CONST)
+                                    break;
+
                     //            if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
                     //                /* global asm block */
                     //                asm_global_instr();
@@ -679,8 +1141,10 @@ namespace TidePool
                     //                    expect("declaration");
                     //                break;
                     //            }
-                    //        }
-                    //        if (tok == ';') {
+                }
+
+                if (prep.tok == ';')
+                {
                     //	    if ((btype.t & VT_BTYPE) == VT_STRUCT) {
                     //		int v = btype.ref->v;
                     //		if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) >= SYM_FIRST_ANOM)
@@ -706,18 +1170,18 @@ namespace TidePool
                     //		type.ref = sym_push(SYM_FIELD, &type.ref->type, 0, type.ref->c);
                     //	    }
 
-                    //type_decl(&type, &ad, &v, TYPE_DIRECT);
+                    type_decl(type, ad, ref v, TYPE_DIRECT);
 
-                    //            if ((type.t & VT_BTYPE) == VT_FUNC) {
-                    //                if ((type.t & VT_STATIC) && (l == VT_LOCAL)) {
-                    //                    tcc_error("function without file scope cannot be static");
-                    //                }
-                    //                /* if old style function prototype, we accept a
-                    //                   declaration list */
-                    //                sym = type.ref;
-                    //                if (sym->f.func_type == FUNC_OLD && l == VT_CONST)
-                    //                    decl0(VT_CMP, 0, sym);
-                    //            }
+                    if ((type.t & VT_BTYPE) == VT_FUNC)
+                    {
+                        //                if ((type.t & VT_STATIC) && (l == VT_LOCAL)) {
+                        //                    tcc_error("function without file scope cannot be static");
+                        //                }
+                        /* if old style function prototype, we accept a declaration list */
+                        sym = type.reff;
+                        if (sym.f.func_type == FUNC_OLD && l == VT_CONST)
+                            decl0(VT_CMP, false, sym);
+                    }
 
                     //            if (gnu_ext && (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3)) {
                     //                ad.asm_label = asm_label_instr();
@@ -740,147 +1204,151 @@ namespace TidePool
                     //            }
                     //#endif
 
-                    //            if (tok == '{') {
-                    //                if (l != VT_CONST)
-                    //                    tcc_error("cannot use local functions");
-                    //                if ((type.t & VT_BTYPE) != VT_FUNC)
-                    //                    expect("function definition");
-                    //
-                    //                /* reject abstract declarators in function definition
-                    //		   make old style params without decl have int type */
-                    //                sym = type.ref;
-                    //                while ((sym = sym->next) != NULL) {
-                    //                    if (!(sym->v & ~SYM_FIELD))
-                    //                        expect("identifier");
-                    //		    if (sym->type.t == VT_VOID)
-                    //		        sym->type = int_type;
-                    //		}
+                    if (prep.tok == '{')
+                    {
+                        //                if (l != VT_CONST)
+                        //                    tcc_error("cannot use local functions");
+                        //                if ((type.t & VT_BTYPE) != VT_FUNC)
+                        //                    expect("function definition");
 
-                    /* XXX: cannot do better now: convert extern line to static inline */
-                    //                if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
-                    //                    type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+                        /* reject abstract declarators in function definition make old style params without decl have int type */
+                        //                sym = type.ref;
+                        //                while ((sym = sym->next) != NULL) {
+                        //                    if (!(sym->v & ~SYM_FIELD))
+                        //                        expect("identifier");
+                        //		    if (sym->type.t == VT_VOID)
+                        //		        sym->type = int_type;
+                        //		}
 
-                    //                /* put function symbol */
-                    //                sym = external_global_sym(v, &type, 0);
-                    //                type.t &= ~VT_EXTERN;
-                    //                patch_storage(sym, &ad, &type);
-                    //
-                    //                /* static inline functions are just recorded as a kind
-                    //                   of macro. Their code will be emitted at the end of
-                    //                   the compilation unit only if they are used */
-                    //                if ((type.t & (VT_INLINE | VT_STATIC)) == 
-                    //                    (VT_INLINE | VT_STATIC)) {
-                    //                    struct InlineFunc *fn;
-                    //                    const char *filename;
-                    //                           
-                    //                    filename = file ? file->filename : "";
-                    //                    fn = tcc_malloc(sizeof *fn + strlen(filename));
-                    //                    strcpy(fn->filename, filename);
-                    //                    fn->sym = sym;
-                    //		    skip_or_save_block(&fn->func_str);
-                    //                    dynarray_add(&tcc_state->inline_fns,
-                    //				 &tcc_state->nb_inline_fns, fn);
-                    //                } else {
-                    //                    /* compute text section */
-                    //                    cur_text_section = ad.section;
-                    //                    if (!cur_text_section)
-                    //                        cur_text_section = text_section;
-                    //                    gen_function(sym);
-                    //                }
-                    //                break;
-                    //            } else {
-                    //		if (l == VT_CMP) {
-                    //		    /* find parameter in function parameter list */
-                    //		    for (sym = func_sym->next; sym; sym = sym->next)
-                    //			if ((sym->v & ~SYM_FIELD) == v)
-                    //			    goto found;
-                    //		    tcc_error("declaration for parameter '%s' but no such parameter",
-                    //			      get_tok_str(v, NULL));
-                    //found:
-                    //		    if (type.t & VT_STORAGE) /* 'register' is okay */
-                    //		        tcc_error("storage class specified for '%s'",
-                    //				  get_tok_str(v, NULL));
-                    //		    if (sym->type.t != VT_VOID)
-                    //		        tcc_error("redefinition of parameter '%s'",
-                    //				  get_tok_str(v, NULL));
-                    //		    convert_parameter_type(&type);
-                    //		    sym->type = type;
-                    //		} else if (type.t & VT_TYPEDEF) {
-                    //                    /* save typedefed type  */
-                    //                    /* XXX: test storage specifiers ? */
-                    //                    sym = sym_find(v);
-                    //                    if (sym && sym->sym_scope == local_scope) {
-                    //                        if (!is_compatible_types(&sym->type, &type)
-                    //                            || !(sym->type.t & VT_TYPEDEF))
-                    //                            tcc_error("incompatible redefinition of '%s'",
-                    //                                get_tok_str(v, NULL));
-                    //                        sym->type = type;
-                    //                    } else {
-                    //                        sym = sym_push(v, &type, 0, 0);
-                    //                    }
-                    //                    sym->a = ad.a;
-                    //                    sym->f = ad.f;
-                    //                } else {
-                    //                    r = 0;
-                    //                    if ((type.t & VT_BTYPE) == VT_FUNC) {
-                    //                        /* external function definition */
-                    //                        /* specific case for func_call attribute */
-                    //                        type.ref->f = ad.f;
-                    //                    } else if (!(type.t & VT_ARRAY)) {
-                    //                        /* not lvalue if array */
-                    //                        r |= lvalue_type(type.t);
-                    //                    }
-                    //                    has_init = (tok == '=');
-                    //                    if (has_init && (type.t & VT_VLA))
-                    //                        tcc_error("variable length array cannot be initialized");
-                    //                    if (((type.t & VT_EXTERN) && (!has_init || l != VT_CONST)) ||
-                    //			((type.t & VT_BTYPE) == VT_FUNC) ||
-                    //                        ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
-                    //                         !has_init && l == VT_CONST && type.ref->c < 0)) {
-                    //                        /* external variable or function */
-                    //                        /* NOTE: as GCC, uninitialized global static
-                    //                           arrays of null size are considered as
-                    //                           extern */
-                    //                        type.t |= VT_EXTERN;
-                    //                        sym = external_sym(v, &type, r, &ad);
-                    //                        if (ad.alias_target) {
-                    //                            ElfSym *esym;
-                    //                            Sym *alias_target;
-                    //                            alias_target = sym_find(ad.alias_target);
-                    //                            esym = elfsym(alias_target);
-                    //                            if (!esym)
-                    //                                tcc_error("unsupported forward __alias__ attribute");
-                    //                            /* Local statics have a scope until now (for
-                    //                               warnings), remove it here.  */
-                    //                            sym->sym_scope = 0;
-                    //                            put_extern_sym2(sym, esym->st_shndx, esym->st_value, esym->st_size, 0);
-                    //                        }
-                    //                    } else {
-                    //                        if (type.t & VT_STATIC)
-                    //                            r |= VT_CONST;
-                    //                        else
-                    //                            r |= l;
-                    //                        if (has_init)
-                    //                            next();
-                    //                        else if (l == VT_CONST)
-                    //                            /* uninitialized global variables may be overridden */
-                    //                            type.t |= VT_EXTERN;
-                    //                        decl_initializer_alloc(&type, &ad, r, has_init, v, l);
-                    //                    }
-                    //                }
-                    //                if (tok != ',') {
-                    //                    if (is_for_loop_init)
-                    //                        return 1;
-                    //                    skip(';');
-                    //                    break;
-                    //                }
-                    //                next();
-                    //            }
-                    //            ad.a.aligned = 0;
+                        /* XXX: cannot do better now: convert extern line to static inline */
+                        //                if ((type.t & (VT_EXTERN | VT_INLINE)) == (VT_EXTERN | VT_INLINE))
+                        //                    type.t = (type.t & ~VT_EXTERN) | VT_STATIC;
+
+                        /* put function symbol */
+                        sym = external_global_sym(v, type, 0);
+                        type.t &= ~VT_EXTERN;
+                        patch_storage(sym, ad, type);
+
+                        /* static inline functions are just recorded as a kind
+                           of macro. Their code will be emitted at the end of
+                           the compilation unit only if they are used */
+                        if ((type.t & (VT_INLINE | VT_STATIC)) == (VT_INLINE | VT_STATIC))
+                        {
+                            //                    struct InlineFunc *fn;
+                            //                    const char *filename;
+                            //                           
+                            //                    filename = file ? file->filename : "";
+                            //                    fn = tcc_malloc(sizeof *fn + strlen(filename));
+                            //                    strcpy(fn->filename, filename);
+                            //                    fn->sym = sym;
+                            //		    skip_or_save_block(&fn->func_str);
+                            //                    dynarray_add(&tcc_state->inline_fns,
+                            //				 &tcc_state->nb_inline_fns, fn);
+                        }
+                        else
+                        {
+                            /* compute text section */
+                            Section.curTextSection = ad.section;
+                            if (Section.curTextSection == null)
+                                Section.curTextSection = Section.textSection;
+                            gen_function(sym);
+                        }
+                        break;
+                    }
+                    else
+                    {
+                        //		if (l == VT_CMP) {
+                        //		    /* find parameter in function parameter list */
+                        //		    for (sym = func_sym->next; sym; sym = sym->next)
+                        //			if ((sym->v & ~SYM_FIELD) == v)
+                        //			    goto found;
+                        //		    tcc_error("declaration for parameter '%s' but no such parameter",
+                        //			      get_tok_str(v, NULL));
+                        //found:
+                        //		    if (type.t & VT_STORAGE) /* 'register' is okay */
+                        //		        tcc_error("storage class specified for '%s'",
+                        //				  get_tok_str(v, NULL));
+                        //		    if (sym->type.t != VT_VOID)
+                        //		        tcc_error("redefinition of parameter '%s'",
+                        //				  get_tok_str(v, NULL));
+                        //		    convert_parameter_type(&type);
+                        //		    sym->type = type;
+                        //		} else if (type.t & VT_TYPEDEF) {
+                        //                    /* save typedefed type  */
+                        //                    /* XXX: test storage specifiers ? */
+                        //                    sym = sym_find(v);
+                        //                    if (sym && sym->sym_scope == local_scope) {
+                        //                        if (!is_compatible_types(&sym->type, &type)
+                        //                            || !(sym->type.t & VT_TYPEDEF))
+                        //                            tcc_error("incompatible redefinition of '%s'",
+                        //                                get_tok_str(v, NULL));
+                        //                        sym->type = type;
+                        //                    } else {
+                        //                        sym = sym_push(v, &type, 0, 0);
+                        //                    }
+                        //                    sym->a = ad.a;
+                        //                    sym->f = ad.f;
+                        //                } else {
+                        //                    r = 0;
+                        //                    if ((type.t & VT_BTYPE) == VT_FUNC) {
+                        //                        /* external function definition */
+                        //                        /* specific case for func_call attribute */
+                        //                        type.ref->f = ad.f;
+                        //                    } else if (!(type.t & VT_ARRAY)) {
+                        //                        /* not lvalue if array */
+                        //                        r |= lvalue_type(type.t);
+                        //                    }
+                        //                    has_init = (tok == '=');
+                        //                    if (has_init && (type.t & VT_VLA))
+                        //                        tcc_error("variable length array cannot be initialized");
+                        //                    if (((type.t & VT_EXTERN) && (!has_init || l != VT_CONST)) ||
+                        //			((type.t & VT_BTYPE) == VT_FUNC) ||
+                        //                        ((type.t & VT_ARRAY) && (type.t & VT_STATIC) &&
+                        //                         !has_init && l == VT_CONST && type.ref->c < 0)) {
+                        //                        /* external variable or function */
+                        //                        /* NOTE: as GCC, uninitialized global static
+                        //                           arrays of null size are considered as
+                        //                           extern */
+                        //                        type.t |= VT_EXTERN;
+                        //                        sym = external_sym(v, &type, r, &ad);
+                        //                        if (ad.alias_target) {
+                        //                            ElfSym *esym;
+                        //                            Sym *alias_target;
+                        //                            alias_target = sym_find(ad.alias_target);
+                        //                            esym = elfsym(alias_target);
+                        //                            if (!esym)
+                        //                                tcc_error("unsupported forward __alias__ attribute");
+                        //                            /* Local statics have a scope until now (for
+                        //                               warnings), remove it here.  */
+                        //                            sym->sym_scope = 0;
+                        //                            put_extern_sym2(sym, esym->st_shndx, esym->st_value, esym->st_size, 0);
+                        //                        }
+                        //                    } else {
+                        //                        if (type.t & VT_STATIC)
+                        //                            r |= VT_CONST;
+                        //                        else
+                        //                            r |= l;
+                        //                        if (has_init)
+                        //                            next();
+                        //                        else if (l == VT_CONST)
+                        //                            /* uninitialized global variables may be overridden */
+                        //                            type.t |= VT_EXTERN;
+                        //                        decl_initializer_alloc(&type, &ad, r, has_init, v, l);
+                        //                    }
+                        //                }
+                        //                if (tok != ',') {
+                        //                    if (is_for_loop_init)
+                        //                        return 1;
+                        //                    skip(';');
+                        //                    break;
+                        //                }
+                        //                next();
+                    }
+                    ad.a.aligned = 0;
                 }
             }
-            return 0;
 
+            return 0;
         }
 
         public void decl(int l)
@@ -931,8 +1399,19 @@ namespace TidePool
         public int asm_label; /* associated asm label */
         public char attr_mode; /* __attribute__((__mode__(...))) */
 
+        public AttributeDef()
+        {
+            reset();
+        }
+
         public void reset()
         {
+            a = new SymAttr();
+            f = new FuncAttr();
+            section = null;
+            alias_target = 0;
+            asm_label = 0;
+            attr_mode = '\0';
         }
     }
 
@@ -955,30 +1434,24 @@ namespace TidePool
         public int asm_label;          /* associated asm label */
         public Sym prev;               /* prev symbol in stack */
         public Sym prev_tok;           /* previous symbol for this token */
-    }
 
-    //---------------------------------------------------------------------
-
-    public class Section
-    {
-        public ulong data_offset;          /* current data offset */
-        public byte[] data;                /* section data */
-        public ulong data_allocated;       /* used for realloc() handling */
-        public int sh_name;                /* elf section name (only used during output) */
-        public int sh_num;                 /* elf section number */
-        public int sh_type;                /* elf section type */
-        public int sh_flags;               /* elf section flags */
-        public int sh_info;                /* elf section info */
-        public int sh_addralign;           /* elf section alignment */
-        public int sh_entsize;             /* elf entry size */
-        public ulong sh_size;              /* section size (only used during output) */
-        public ulong sh_addr;              /* address at which the section is relocated */
-        public ulong sh_offset;            /* file offset */
-        public int nb_hashed_syms;         /* used to resize the hash table */
-        public Section link;               /* link to another section */
-        public Section reloc;              /* corresponding section for relocation, if any */
-        public Section hash;               /* hash table for symbols */
-        public Section prev;               /* previous section on section stack */
-        public string name;                /* section name */
+        public Sym()
+        {
+            v = 0;
+            r = 0;
+            a = new SymAttr();
+            c = 0;
+            sym_scope = 0;
+            jnext = 0;
+            f = new FuncAttr();
+            auxtype = 0;
+            enum_val = 0;
+            d = 0;
+            type = new CType();
+            next = null;
+            asm_label = 0;
+            prev = null;
+            prev_tok = null;
+        }
     }
 }
