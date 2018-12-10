@@ -5,6 +5,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TidePool", "TidePool\TidePo
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TinyC", "TinyC.vcxproj", "{25B9090D-A2A5-4615-BFC1-CCCF7EFC2938}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test", "Test.vcxproj", "{C99AC758-01B3-4052-AF66-8798D9ED2E6B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Mixed Platforms = Debug|Mixed Platforms
@@ -35,6 +37,16 @@ Global
 		{25B9090D-A2A5-4615-BFC1-CCCF7EFC2938}.Release|Win32.ActiveCfg = Release|Win32
 		{25B9090D-A2A5-4615-BFC1-CCCF7EFC2938}.Release|Win32.Build.0 = Release|Win32
 		{25B9090D-A2A5-4615-BFC1-CCCF7EFC2938}.Release|x86.ActiveCfg = Release|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Debug|Mixed Platforms.ActiveCfg = Debug|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Debug|Mixed Platforms.Build.0 = Debug|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Debug|Win32.Build.0 = Debug|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Debug|x86.ActiveCfg = Debug|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Release|Mixed Platforms.ActiveCfg = Release|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Release|Mixed Platforms.Build.0 = Release|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Release|Win32.ActiveCfg = Release|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Release|Win32.Build.0 = Release|Win32
+		{C99AC758-01B3-4052-AF66-8798D9ED2E6B}.Release|x86.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

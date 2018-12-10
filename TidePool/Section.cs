@@ -13,7 +13,7 @@ namespace TidePool
         public static Section commonSection;
         public static Section curTextSection;        /* current section where function code is generated */
 
-        public ulong data_offset;          /* current data offset */
+        public int data_offset;          /* current data offset */
         public byte[] data;                /* section data */
         public ulong data_allocated;       /* used for realloc() handling */
         public int sh_name;                /* elf section name (only used during output) */

@@ -158,10 +158,12 @@ namespace TidePool
         TOK_ASM2,
         TOK_ASM3,
 
+
         /*********************************************************************/
         /* the following are not keywords. They are included to ease parsing */
         /* preprocessor only */
         TOK_DEFINE,
+        TOK_UIDENT = TOK_DEFINE,
         TOK_INCLUDE,
         TOK_INCLUDE_NEXT,
         TOK_IFDEF,
@@ -283,7 +285,12 @@ namespace TidePool
         public const int PARSE_FLAG_TOK_STR = 0x0040;	        /* return parsed strings instead of TOK_PPSTR */
 
         public const int TOK_HASH_SIZE = 16384;                 /* must be a power of two */
-        static List<TokenSym>[] hash_ident;			            //symbol tbl
+        public List<TokenSym>[] hash_ident;			            //symbol tbl
+        public string token_buf;
+
+//static CString cstr_buf;							//for token spelling
+//static CString macro_equal_buf;
+//static TokenString tokstr_buf;							//for defines
 
         public int[] isidnum_table;
 
@@ -291,6 +298,14 @@ namespace TidePool
         public const int IS_SPC = 1;
         public const int IS_ID = 2;
         public const int IS_NUM = 4;
+
+        public int pp_debug_tok;
+        public int pp_debug_symv;
+        public int pp_once;
+        public int pp_expr;
+        public int pp_counter;
+
+        //static TokenString *macro_stack;
 
         public string[] tcc_keywords = { "int", "void", "char", "if", "else", "while", "break", "return", 
                                          "for", "extern", "static", "unsigned", "goto", "do", "continue", "switch", "case",
@@ -720,7 +735,333 @@ namespace TidePool
         public void parse_string() { }
         public void bn_lshift() { }
         public void bn_zero() { }
-        public void parse_number() { }
+
+        /* parse number in null terminated string 'p' and return it in the current token */
+        public void parse_number(string p)
+        {
+            int b;
+            int t;
+            int shift;
+            int frac_bits;
+            int s;
+            int exp_val;
+            int ch;
+            char[] q = new char[1025];
+            uint[] bn = new uint[2];
+            double d;
+
+            /* number */
+            int qpos = 0;
+            int ppos = 0;
+            ch = p[ppos++];
+            t = ch;
+            ch = p[ppos++];
+            q[qpos++] = (char)t;
+            b = 10;
+            if (t == '.')
+            {
+                //goto float_frac_parse;
+            }
+            else if (t == '0')
+            {
+                if (ch == 'x' || ch == 'X')
+                {
+                    qpos--;
+                    ch = p[ppos++];
+                    b = 16;
+                }
+                else if (ch == 'b' || ch == 'B')
+                {
+                    qpos--;
+                    ch = p[ppos++];
+                    b = 2;
+                }
+            }
+
+            /* parse all digits. cannot check octal numbers at this stage because of floating point constants */
+            while (true)
+            {
+                if (ch >= 'a' && ch <= 'f')
+                    t = ch - 'a' + 10;
+                else if (ch >= 'A' && ch <= 'F')
+                    t = ch - 'A' + 10;
+                else if (isnum(ch))
+                    t = ch - '0';
+                else
+                    break;
+                if (t >= b)
+                    break;
+                if (qpos >= 1024)
+                {
+                num_too_long:
+                    tp.tp_error("number too long");
+                }
+                q[qpos++] = (char)ch;
+                ch = p[ppos++];
+            }
+
+            if (ch == '.' ||
+                ((ch == 'e' || ch == 'E') && b == 10) ||
+                ((ch == 'p' || ch == 'P') && (b == 16 || b == 2)))
+            {
+            //            if (b != 10) {
+            /* NOTE: strtox should support that for hexa numbers, but
+            non ISOC99 libcs do not support it, so we prefer to do it by hand */
+            /* hexadecimal or binary floats */
+            /* XXX: handle overflows */
+            //                *q = '\0';
+            //                if (b == 16)
+            //                    shift = 4;
+            //                else 
+            //                    shift = 1;
+            //                bn_zero(bn);
+            //                q = token_buf;
+            //                while (1) {
+            //                    t = *q++;
+            //                    if (t == '\0') {
+            //                        break;
+            //                    } else if (t >= 'a') {
+            //                        t = t - 'a' + 10;
+            //                    } else if (t >= 'A') {
+            //                        t = t - 'A' + 10;
+            //                    } else {
+            //                        t = t - '0';
+            //                    }
+            //                    bn_lshift(bn, shift, t);
+            //                }
+            //                frac_bits = 0;
+            //                if (ch == '.') {
+            //                    ch = *p++;
+            //                    while (1) {
+            //                        t = ch;
+            //                        if (t >= 'a' && t <= 'f') {
+            //                            t = t - 'a' + 10;
+            //                        } else if (t >= 'A' && t <= 'F') {
+            //                            t = t - 'A' + 10;
+            //                        } else if (t >= '0' && t <= '9') {
+            //                            t = t - '0';
+            //                        } else {
+            //                            break;
+            //                        }
+            //                        if (t >= b)
+            //                            tcc_error("invalid digit");
+            //                        bn_lshift(bn, shift, t);
+            //                        frac_bits += shift;
+            //                        ch = *p++;
+            //                    }
+            //                }
+            //                if (ch != 'p' && ch != 'P')
+            //                    expect("exponent");
+            //                ch = *p++;
+            //                s = 1;
+            //                exp_val = 0;
+            //                if (ch == '+') {
+            //                    ch = *p++;
+            //                } else if (ch == '-') {
+            //                    s = -1;
+            //                    ch = *p++;
+            //                }
+            //                if (ch < '0' || ch > '9')
+            //                    expect("exponent digits");
+            //                while (ch >= '0' && ch <= '9') {
+            //                    exp_val = exp_val * 10 + ch - '0';
+            //                    ch = *p++;
+            //                }
+            //                exp_val = exp_val * s;
+
+                //                /* now we can generate the number */
+            //                /* XXX: should patch directly float number */
+            //                d = (double)bn[1] * 4294967296.0 + (double)bn[0];
+            //                d = ldexp(d, exp_val - frac_bits);
+            //                t = toup(ch);
+            //                if (t == 'F') {
+            //                    ch = *p++;
+            //                    tok = TOK_CFLOAT;
+            //                    /* float : should handle overflow */
+            //                    tokc.f = (float)d;
+            //                } else if (t == 'L') {
+            //                    ch = *p++;
+            //#ifdef TCC_TARGET_PE
+            //                    tok = TOK_CDOUBLE;
+            //                    tokc.d = d;
+            //#else
+            //                    tok = TOK_CLDOUBLE;
+            //                    /* XXX: not large enough */
+            //                    tokc.ld = (long double)d;
+            //#endif
+            //                } else {
+            //                    tok = TOK_CDOUBLE;
+            //                    tokc.d = d;
+            //                }
+            //            } else {
+            //                /* decimal floats */
+            //                if (ch == '.') {
+            //                    if (q >= token_buf + STRING_MAX_SIZE)
+            //                        goto num_too_long;
+            //                    *q++ = ch;
+            //                    ch = *p++;
+            float_frac_parse:
+                //                    while (ch >= '0' && ch <= '9') {
+                //                        if (q >= token_buf + STRING_MAX_SIZE)
+                //                            goto num_too_long;
+                //                        *q++ = ch;
+                //                        ch = *p++;
+                //                    }
+                //                }
+                //                if (ch == 'e' || ch == 'E') {
+                //                    if (q >= token_buf + STRING_MAX_SIZE)
+                //                        goto num_too_long;
+                //                    *q++ = ch;
+                //                    ch = *p++;
+                //                    if (ch == '-' || ch == '+') {
+                //                        if (q >= token_buf + STRING_MAX_SIZE)
+                //                            goto num_too_long;
+                //                        *q++ = ch;
+                //                        ch = *p++;
+                //                    }
+                //                    if (ch < '0' || ch > '9')
+                //                        expect("exponent digits");
+                //                    while (ch >= '0' && ch <= '9') {
+                //                        if (q >= token_buf + STRING_MAX_SIZE)
+                //                            goto num_too_long;
+                //                        *q++ = ch;
+                //                        ch = *p++;
+                //                    }
+                //                }
+                //                *q = '\0';
+                //                t = toup(ch);
+                //                errno = 0;
+                //                if (t == 'F') {
+                //                    ch = *p++;
+                //                    tok = TOK_CFLOAT;
+                //                    tokc.f = strtof(token_buf, NULL);
+                //                } else if (t == 'L') {
+                //                    ch = *p++;
+                //#ifdef TCC_TARGET_PE
+                tok = (int)TPTOKEN.TOK_CDOUBLE;
+                tokc.d = Convert.ToDouble(token_buf);
+                //#else
+                //                    tok = TOK_CLDOUBLE;
+                //                    tokc.ld = strtold(token_buf, NULL);
+                //#endif
+                //                } else {
+                //                    tok = TOK_CDOUBLE;
+                //                    tokc.d = strtod(token_buf, NULL);
+                //                }
+                //            }
+            }
+            else
+            {
+                ulong n;
+                ulong n1;
+                int lcount;
+                int ucount;
+                bool ov = false;
+                string p1;
+
+                /* integer number */
+                q[qpos] = '\0';
+                qpos = 0;
+                if (b == 10 && q[qpos] == '0')
+                {
+                    b = 8;
+                    qpos++;
+                }
+                n = 0;
+                while (true)
+                {
+                    t = q[qpos++];
+                    /* no need for checks except for base 10 / 8 errors */
+                    if (t == '\0')
+                        break;
+                    else if (t >= 'a')
+                        t = t - 'a' + 10;
+                    else if (t >= 'A')
+                        t = t - 'A' + 10;
+                    else
+                        t = t - '0';
+                    if (t >= b)
+                        tp.tp_error("invalid digit");
+                    n1 = n;
+                    n = (n * (ulong)b) + (ulong)t;
+                    /* detect overflow */
+                    if ((n1 >= 0x1000000000000000UL) && ((n / (ulong)b) != n1))
+                        ov = true;
+                }
+
+                /* Determine the characteristics (unsigned and/or 64bit) the type of
+                the constant must have according to the constant suffix(es) */
+                lcount = ucount = 0;
+                p1 = p;
+                for (; ; )
+                {
+                    t = toup((char)ch);
+                    if (t == 'L')
+                    {
+                        if (lcount >= 2)
+                            tp.tp_error("three 'l's in integer constant");
+                        if ((lcount > 0) && (p[ppos - 1] != ch))
+                            tp.tp_error("incorrect integer suffix: {0}", p1);
+                        lcount++;
+                        ch = p[ppos++];
+                    }
+                    else if (t == 'U')
+                    {
+                        if (ucount >= 1)
+                            tp.tp_error("two 'u's in integer constant");
+                        ucount++;
+                        ch = p[ppos++];
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                /* Determine if it needs 64 bits and/or unsigned in order to fit */
+                if (ucount == 0 && b == 10)
+                {
+                    if (lcount <= 1)
+                    {
+                        if (n >= 0x80000000U)
+                            lcount = 1 + 1;
+                    }
+                    if (n >= 0x8000000000000000UL)
+                    {
+                        ov = true;
+                        ucount = 1;
+                    }
+                }
+                else
+                {
+                    if (lcount <= 1)
+                    {
+                        if (n >= 0x100000000UL)
+                            lcount = 1 + 1;
+                        else if (n >= 0x80000000U)
+                            ucount = 1;
+                    }
+                    if (n >= 0x8000000000000000UL)
+                        ucount = 1;
+                }
+
+                if (ov)
+                    tp.tp_warning("integer constant overflow");
+
+                tok = (int)TPTOKEN.TOK_CINT;
+                if (lcount != 0)
+                {
+                    tok = (int)TPTOKEN.TOK_CLONG;
+                    if (lcount == 2)
+                        tok = (int)TPTOKEN.TOK_CLLONG;
+                }
+                if (ucount != 0)
+                    ++tok; /* TOK_CU... */
+                tokc.i = n;
+            }
+            if (ch != 0)
+                tp.tp_error("invalid number\n");
+        }
 
         //- scanning & macro subs -----------------------------------------------------
 
@@ -1058,6 +1399,7 @@ namespace TidePool
             {
                 next_nomacro();
             }
+
             //    if (macro_ptr) {
             //        if (tok == TOK_NOSUBST || tok == TOK_PLCHLDR) {
             //        /* discard preprocessor markers */
@@ -1080,14 +1422,18 @@ namespace TidePool
             //            goto redo;
             //        }
             //    }
-            //    /* convert preprocessor tokens into C tokens */
-            //    if (tok == TOK_PPNUM) {
-            //        if  (parse_flags & PARSE_FLAG_TOK_NUM)
-            //            parse_number((char *)tokc.str.data);
-            //    } else if (tok == TOK_PPSTR) {
-            //        if (parse_flags & PARSE_FLAG_TOK_STR)
-            //            parse_string((char *)tokc.str.data, tokc.str.size - 1);
-            //    }
+
+            /* convert preprocessor tokens into C tokens */
+            if (tok == (int)TPTOKEN.TOK_PPNUM)
+            {
+                        if  ((parseFlags & PARSE_FLAG_TOK_NUM) != 0)
+                            parse_number(tokc.str);
+            }
+            else if (tok == (int)TPTOKEN.TOK_PPSTR)
+            {
+                //        if (parse_flags & PARSE_FLAG_TOK_STR)
+                //            parse_string((char *)tokc.str.data, tokc.str.size - 1);
+            }
         }
 
         public void unget_tok() { }
@@ -1206,10 +1552,10 @@ namespace TidePool
 
     public class CValue
     {
-        public double ld;
+        public double ld;       //double & long double are the same in VC++ - 8 bytes
         public double d;
-        public float f;
-        public int i;
+        public float f;         //4 bytes
+        public ulong i;         //8 bytes
         public string str;
         public int[] tab;
     }

@@ -104,6 +104,16 @@ namespace TidePool
         public const int VT_STORAGE = (VT_EXTERN | VT_STATIC | VT_TYPEDEF | VT_INLINE);
         public const int VT_TYPE = (~(VT_STORAGE | VT_STRUCT_MASK));
 
+        public int rsym;
+        public int anon_sym;
+        public int ind;
+        public int loc;
+
+        //symbol allocation
+        //ST_DATA Sym *sym_free_first;
+        //ST_DATA void **sym_pools;
+        //ST_DATA int nb_sym_pools;
+
         public List<Sym> global_stack;
         public List<Sym> local_stack;
         public List<Sym> define_stack;
@@ -113,12 +123,45 @@ namespace TidePool
         public int in_sizeof;
         public int section_sym;
 
+        //ST_DATA int vlas_in_scope; /* number of VLAs that are currently in scope */
+        //ST_DATA int vla_sp_root_loc; /* vla_sp_loc for SP before any VLAs were pushed */
+        //ST_DATA int vla_sp_loc; /* Pointer to variable holding location to store stack pointer on the stack when modifying stack pointer */
+
+        //        #define SYM_POOL_NB (8192 / sizeof(Sym))
+
+        public const int VSTACK_SIZE = 256;
+        public SValue[] vstack;
+        public int vtop;
+        public int pvtop;
+
+        public bool const_wanted; /* true if constant wanted */
+        public bool nocode_wanted; /* true if no code generation wanted for an expression */
+        public bool global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
+
+        public CType func_vt; /* current function return type (used by return instruction) */
+        public bool func_var; /* true if current function is variadic */
+        public int func_vc;
+        public int last_line_num;
+        public int last_ind;
+        public int func_ind; /* debug last line number and pc */
+        public string funcname;
+        public int g_debug;
+
+        //ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
+
+        //#define NODATA_WANTED (nocode_wanted > 0) /* no static data output wanted either */
+        //#define STATIC_DATA_WANTED (nocode_wanted & 0xC0000000) /* only static data output */
+
+        //ST_DATA CType char_pointer_type, func_old_type, int_type, size_type, ptrdiff_type;
+
         public Compiler(TidePool _tp)
         {
             tp = _tp;
 
             global_stack = new List<Sym>();
             local_stack = null;
+            vstack = new SValue[VSTACK_SIZE];
+            vtop = 0;
         }
 
         public void is_float() { }
@@ -225,7 +268,11 @@ namespace TidePool
 
         }
         public void put_extern_sym2() { }
-        public void put_extern_sym() { }
+
+        public void put_extern_sym()
+        {
+        }
+
         public void greloca() { }
         public void greloc() { }
 
@@ -313,7 +360,46 @@ namespace TidePool
         }
 
         public void sym_pop() { }
-        public void vsetc() { }
+
+        //---------------------------------------------------------------------
+
+        public void vsetc(CType type, int r, CValue vc)
+        {
+            int v;
+
+            if (vtop >= (VSTACK_SIZE - 1))
+                tp.tp_error("memory full (vstack)");
+
+            /* cannot let cpu flags if other instruction are generated. Also
+            avoid leaving VT_JMP anywhere except on the top of the stack
+            because it would complicate the code generator.
+
+            Don't do this when nocode_wanted.  vtop might come from
+            !nocode_wanted regions (see 88_codeopt.c) and transforming
+            it to a register without actually generating code is wrong
+            as their value might still be used for real.  All values
+            we push under nocode_wanted will eventually be popped
+            again, so that the VT_CMP/VT_JMP value will be in vtop
+            when code is unsuppressed again.
+
+            Same logic below in vswap(); */
+            if (vtop >= 1 && !nocode_wanted)
+            {
+                v = vstack[vtop].r & VT_VALMASK;
+                if (v == VT_CMP || (v & ~1) == VT_JMP)
+                    gv(Generator.RC_INT);
+            }
+
+            SValue sval = new SValue();
+            vtop++;
+            sval.type = type;
+            sval.r = r;
+            sval.r2 = VT_CONST;
+            sval.c = vc;
+            sval.sym = null;
+            vstack[++vtop] = sval;
+        }
+
         public void vswap() { }
         public void vpop() { }
         public void vpush() { }
@@ -444,7 +530,12 @@ namespace TidePool
         public void load_packed_bf() { }
         public void store_packed_bf() { }
         public void adjust_bf() { }
-        public void gv() { }
+
+        public int gv(int rc)
+        {
+            return 0;       //dummy
+        }
+
         public void gv2() { }
         public void rc_fret() { }
         public void reg_fret() { }
@@ -1018,29 +1109,1552 @@ namespace TidePool
 
         public void parse_type() { }
         public void parse_builtin_params() { }
-        public void unary() { }
-        public void expr_prod() { }
-        public void expr_sum() { }
-        public void expr_shift() { }
-        public void expr_cmp() { }
-        public void expr_cmpeq() { }
-        public void expr_and() { }
-        public void expr_xor() { }
-        public void expr_or() { }
-        public void expr_land() { }
-        public void expr_lor() { }
+
+        public void unary()
+        {
+            int n;
+            int t;
+            int align;
+            int size;
+            int r;
+            int sizeof_caller;
+            CType type = new CType();
+            Sym s;
+            AttributeDef ad = new AttributeDef();
+
+            sizeof_caller = in_sizeof;
+            in_sizeof = 0;
+            type.reff = null;
+
+            /* XXX: GCC 2.95.3 does not generate a table although it should be better here */
+        tok_next:
+            switch (prep.tok)
+            {
+                case (int)TPTOKEN.TOK_EXTENSION:
+                    prep.next();
+                    goto tok_next;
+
+                //    case TOK_LCHAR:
+                //#ifdef TCC_TARGET_PE
+                //        t = VT_SHORT|VT_UNSIGNED;
+                //        goto push_tokc;
+                //#endif
+
+                case (int)TPTOKEN.TOK_CINT:
+                case (int)TPTOKEN.TOK_CCHAR:
+                    t = VT_INT;
+                push_tokc:
+                    type.t = t;
+                    vsetc(type, VT_CONST, prep.tokc);
+                    prep.next();
+                    break;
+
+                    //    case TOK_CUINT:
+                    //        t = VT_INT | VT_UNSIGNED;
+                    //        goto push_tokc;
+                    //    case TOK_CLLONG:
+                    //        t = VT_LLONG;
+                    //        goto push_tokc;
+                    //    case TOK_CULLONG:
+                    //        t = VT_LLONG | VT_UNSIGNED;
+                    //        goto push_tokc;
+                    //    case TOK_CFLOAT:
+                    //        t = VT_FLOAT;
+                    //        goto push_tokc;
+                    //    case TOK_CDOUBLE:
+                    //        t = VT_DOUBLE;
+                    //        goto push_tokc;
+                    //    case TOK_CLDOUBLE:
+                    //        t = VT_LDOUBLE;
+                    //        goto push_tokc;
+                    //    case TOK_CLONG:
+                    //        t = (LONG_SIZE == 8 ? VT_LLONG : VT_INT) | VT_LONG;
+                    //        goto push_tokc;
+                    //    case TOK_CULONG:
+                    //        t = (LONG_SIZE == 8 ? VT_LLONG : VT_INT) | VT_LONG | VT_UNSIGNED;
+                    //        goto push_tokc;
+                    //    case TOK___FUNCTION__:
+                    //        if (!gnu_ext)
+                    //            goto tok_identifier;
+                    //        /* fall thru */
+                    //    case TOK___FUNC__:
+                    //        {
+                    //            void *ptr;
+                    //            int len;
+                    //            /* special function name identifier */
+                    //            len = strlen(funcname) + 1;
+                    //            /* generate char[len] type */
+                    //            type.t = VT_BYTE;
+                    //            mk_pointer(&type);
+                    //            type.t |= VT_ARRAY;
+                    //            type.ref->c = len;
+                    //            vpush_ref(&type, data_section, data_section->data_offset, len);
+                    //            if (!NODATA_WANTED) {
+                    //                ptr = section_ptr_add(data_section, len);
+                    //                memcpy(ptr, funcname, len);
+                    //            }
+                    //            next();
+                    //        }
+                    //        break;
+                    //    case TOK_LSTR:
+                    //#ifdef TCC_TARGET_PE
+                    //        t = VT_SHORT | VT_UNSIGNED;
+                    //#else
+                    //        t = VT_INT;
+                    //#endif
+                    //        goto str_init;
+                    //    case TOK_STR:
+                    //        /* string parsing */
+                    //        t = VT_BYTE;
+                    //        if (tcc_state->char_is_unsigned)
+                    //            t = VT_BYTE | VT_UNSIGNED;
+                    //str_init:
+                    //        if (tcc_state->warn_write_strings)
+                    //            t |= VT_CONSTANT;
+                    //        type.t = t;
+                    //        mk_pointer(&type);
+                    //        type.t |= VT_ARRAY;
+                    //        memset(&ad, 0, sizeof(AttributeDef));
+                    //        decl_initializer_alloc(&type, &ad, VT_CONST, 2, 0, 0);
+                    //        break;
+                    //    case '(':
+                    //        next();
+                    //        /* cast ? */
+                    //        if (parse_btype(&type, &ad)) {
+                    //            type_decl(&type, &ad, &n, TYPE_ABSTRACT);
+                    //            skip(')');
+                    //            /* check ISOC99 compound literal */
+                    //            if (tok == '{') {
+                    //                /* data is allocated locally by default */
+                    //                if (global_expr)
+                    //                    r = VT_CONST;
+                    //                else
+                    //                    r = VT_LOCAL;
+                    //                /* all except arrays are lvalues */
+                    //                if (!(type.t & VT_ARRAY))
+                    //                    r |= lvalue_type(type.t);
+                    //                memset(&ad, 0, sizeof(AttributeDef));
+                    //                decl_initializer_alloc(&type, &ad, r, 1, 0, 0);
+                    //            } else {
+                    //                if (sizeof_caller) {
+                    //                    vpush(&type);
+                    //                    return;
+                    //                }
+                    //                unary();
+                    //                gen_cast(&type);
+                    //            }
+                    //        } else if (tok == '{') {
+                    //            int saved_nocode_wanted = nocode_wanted;
+                    //            if (const_wanted)
+                    //                tcc_error("expected constant");
+                    //            /* save all registers */
+                    //            save_regs(0);
+                    //            /* statement expression : we do not accept break/continue
+                    //            inside as GCC does.  We do retain the nocode_wanted state,
+                    //            as statement expressions can't ever be entered from the
+                    //            outside, so any reactivation of code emission (from labels
+                    //            or loop heads) can be disabled again after the end of it. */
+                    //            block(NULL, NULL, 1);
+                    //            nocode_wanted = saved_nocode_wanted;
+                    //            skip(')');
+                    //        } else {
+                    //            gexpr();
+                    //            skip(')');
+                    //        }
+                    //        break;
+                    //    case '*':
+                    //        next();
+                    //        unary();
+                    //        indir();
+                    //        break;
+                    //    case '&':
+                    //        next();
+                    //        unary();
+                    //        /* functions names must be treated as function pointers,
+                    //        except for unary '&' and sizeof. Since we consider that
+                    //        functions are not lvalues, we only have to handle it
+                    //        there and in function calls. */
+                    //        /* arrays can also be used although they are not lvalues */
+                    //        if ((vtop->type.t & VT_BTYPE) != VT_FUNC &&
+                    //            !(vtop->type.t & VT_ARRAY))
+                    //            test_lvalue();
+                    //        mk_pointer(&vtop->type);
+                    //        gaddrof();
+                    //        break;
+                    //    case '!':
+                    //        next();
+                    //        unary();
+                    //        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST) {
+                    //            gen_cast_s(VT_BOOL);
+                    //            vtop->c.i = !vtop->c.i;
+                    //        } else if ((vtop->r & VT_VALMASK) == VT_CMP)
+                    //            vtop->c.i ^= 1;
+                    //        else {
+                    //            save_regs(1);
+                    //            vseti(VT_JMP, gvtst(1, 0));
+                    //        }
+                    //        break;
+                    //    case '~':
+                    //        next();
+                    //        unary();
+                    //        vpushi(-1);
+                    //        gen_op('^');
+                    //        break;
+                    //    case '+':
+                    //        next();
+                    //        unary();
+                    //        if ((vtop->type.t & VT_BTYPE) == VT_PTR)
+                    //            tcc_error("pointer not accepted for unary plus");
+                    //        /* In order to force cast, we add zero, except for floating point
+                    //        where we really need an noop (otherwise -0.0 will be transformed
+                    //        into +0.0).  */
+                    //        if (!is_float(vtop->type.t)) {
+                    //            vpushi(0);
+                    //            gen_op('+');
+                    //        }
+                    //        break;
+                    //    case TOK_SIZEOF:
+                    //    case TOK_ALIGNOF1:
+                    //    case TOK_ALIGNOF2:
+                    //        t = tok;
+                    //        next();
+                    //        in_sizeof++;
+                    //        expr_type(&type, unary); /* Perform a in_sizeof = 0; */
+                    //        s = vtop[1].sym; /* hack: accessing previous vtop */
+                    //        size = type_size(&type, &align);
+                    //        if (s && s->a.aligned)
+                    //            align = 1 << (s->a.aligned - 1);
+                    //        if (t == TOK_SIZEOF) {
+                    //            if (!(type.t & VT_VLA)) {
+                    //                if (size < 0)
+                    //                    tcc_error("sizeof applied to an incomplete type");
+                    //                vpushs(size);
+                    //            } else {
+                    //                vla_runtime_type_size(&type, &align);
+                    //            }
+                    //        } else {
+                    //            vpushs(align);
+                    //        }
+                    //        vtop->type.t |= VT_UNSIGNED;
+                    //        break;
+
+                    //    case TOK_builtin_expect:
+                    //        /* __builtin_expect is a no-op for now */
+                    //        parse_builtin_params(0, "ee");
+                    //        vpop();
+                    //        break;
+                    //    case TOK_builtin_types_compatible_p:
+                    //        parse_builtin_params(0, "tt");
+                    //        vtop[-1].type.t &= ~(VT_CONSTANT | VT_VOLATILE);
+                    //        vtop[0].type.t &= ~(VT_CONSTANT | VT_VOLATILE);
+                    //        n = is_compatible_types(&vtop[-1].type, &vtop[0].type);
+                    //        vtop -= 2;
+                    //        vpushi(n);
+                    //        break;
+                    //    case TOK_builtin_choose_expr:
+                    //        {
+                    //            int64_t c;
+                    //            next();
+                    //            skip('(');
+                    //            c = expr_const64();
+                    //            skip(',');
+                    //            if (!c) {
+                    //                nocode_wanted++;
+                    //            }
+                    //            expr_eq();
+                    //            if (!c) {
+                    //                vpop();
+                    //                nocode_wanted--;
+                    //            }
+                    //            skip(',');
+                    //            if (c) {
+                    //                nocode_wanted++;
+                    //            }
+                    //            expr_eq();
+                    //            if (c) {
+                    //                vpop();
+                    //                nocode_wanted--;
+                    //            }
+                    //            skip(')');
+                    //        }
+                    //        break;
+                    //    case TOK_builtin_constant_p:
+                    //        parse_builtin_params(1, "e");
+                    //        n = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+                    //        vtop--;
+                    //        vpushi(n);
+                    //        break;
+                    //    case TOK_builtin_frame_address:
+                    //    case TOK_builtin_return_address:
+                    //        {
+                    //            int tok1 = tok;
+                    //            int level;
+                    //            next();
+                    //            skip('(');
+                    //            if (tok != TOK_CINT) {
+                    //                tcc_error("%s only takes positive integers",
+                    //                    tok1 == TOK_builtin_return_address ?
+                    //                    "__builtin_return_address" :
+                    //                "__builtin_frame_address");
+                    //            }
+                    //            level = (uint32_t)tokc.i;
+                    //            next();
+                    //            skip(')');
+                    //            type.t = VT_VOID;
+                    //            mk_pointer(&type);
+                    //            vset(&type, VT_LOCAL, 0);       /* local frame */
+                    //            while (level--) {
+                    //                mk_pointer(&vtop->type);
+                    //                indir();                    /* -> parent frame */
+                    //            }
+                    //            if (tok1 == TOK_builtin_return_address) {
+                    //                // assume return address is just above frame pointer on stack
+                    //                vpushi(PTR_SIZE);
+                    //                gen_op('+');
+                    //                mk_pointer(&vtop->type);
+                    //                indir();
+                    //            }
+                    //        }
+                    //        break;
+                    //#ifdef TCC_TARGET_X86_64
+                    //#ifdef TCC_TARGET_PE
+                    //    case TOK_builtin_va_start:
+                    //        parse_builtin_params(0, "ee");
+                    //        r = vtop->r & VT_VALMASK;
+                    //        if (r == VT_LLOCAL)
+                    //            r = VT_LOCAL;
+                    //        if (r != VT_LOCAL)
+                    //            tcc_error("__builtin_va_start expects a local variable");
+                    //        vtop->r = r;
+                    //        vtop->type = char_pointer_type;
+                    //        vtop->c.i += 8;
+                    //        vstore();
+                    //        break;
+                    //#else
+                    //    case TOK_builtin_va_arg_types:
+                    //        parse_builtin_params(0, "t");
+                    //        vpushi(classify_x86_64_va_arg(&vtop->type));
+                    //        vswap();
+                    //        vpop();
+                    //        break;
+                    //#endif
+                    //#endif
+
+                    //#ifdef TCC_TARGET_ARM64
+                    //    case TOK___va_start: {
+                    //        parse_builtin_params(0, "ee");
+                    //        //xx check types
+                    //        gen_va_start();
+                    //        vpushi(0);
+                    //        vtop->type.t = VT_VOID;
+                    //        break;
+                    //                         }
+                    //    case TOK___va_arg: {
+                    //        parse_builtin_params(0, "et");
+                    //        type = vtop->type;
+                    //        vpop();
+                    //        //xx check types
+                    //        gen_va_arg(&type);
+                    //        vtop->type = type;
+                    //        break;
+                    //                       }
+                    //    case TOK___arm64_clear_cache: {
+                    //        parse_builtin_params(0, "ee");
+                    //        gen_clear_cache();
+                    //        vpushi(0);
+                    //        vtop->type.t = VT_VOID;
+                    //        break;
+                    //                                  }
+                    //#endif
+                    //                                  /* pre operations */
+                    //    case TOK_INC:
+                    //    case TOK_DEC:
+                    //        t = tok;
+                    //        next();
+                    //        unary();
+                    //        inc(0, t);
+                    //        break;
+                    //    case '-':
+                    //        next();
+                    //        unary();
+                    //        t = vtop->type.t & VT_BTYPE;
+                    //        if (is_float(t)) {
+                    //            /* In IEEE negate(x) isn't subtract(0,x), but rather
+                    //            subtract(-0, x).  */
+                    //            vpush(&vtop->type);
+                    //            if (t == VT_FLOAT)
+                    //                vtop->c.f = -1.0 * 0.0;
+                    //            else if (t == VT_DOUBLE)
+                    //                vtop->c.d = -1.0 * 0.0;
+                    //            else
+                    //                vtop->c.ld = -1.0 * 0.0;
+                    //        } else
+                    //            vpushi(0);
+                    //        vswap();
+                    //        gen_op('-');
+                    //        break;
+                    //    case TOK_LAND:
+                    //        if (!gnu_ext)
+                    //            goto tok_identifier;
+                    //        next();
+                    //        /* allow to take the address of a label */
+                    //        if (tok < TOK_UIDENT)
+                    //            expect("label identifier");
+                    //        s = label_find(tok);
+                    //        if (!s) {
+                    //            s = label_push(&global_label_stack, tok, LABEL_FORWARD);
+                    //        } else {
+                    //            if (s->r == LABEL_DECLARED)
+                    //                s->r = LABEL_FORWARD;
+                    //        }
+                    //        if (!s->type.t) {
+                    //            s->type.t = VT_VOID;
+                    //            mk_pointer(&s->type);
+                    //            s->type.t |= VT_STATIC;
+                    //        }
+                    //        vpushsym(&s->type, s);
+                    //        next();
+                    //        break;
+
+                    //    case TOK_GENERIC:
+                    //        {
+                    //            CType controlling_type;
+                    //            int has_default = 0;
+                    //            int has_match = 0;
+                    //            int learn = 0;
+                    //            TokenString *str = NULL;
+
+                    //            next();
+                    //            skip('(');
+                    //            expr_type(&controlling_type, expr_eq);
+                    //            controlling_type.t &= ~(VT_CONSTANT | VT_VOLATILE | VT_ARRAY);
+                    //            for (;;) {
+                    //                learn = 0;
+                    //                skip(',');
+                    //                if (tok == TOK_DEFAULT) {
+                    //                    if (has_default)
+                    //                        tcc_error("too many 'default'");
+                    //                    has_default = 1;
+                    //                    if (!has_match)
+                    //                        learn = 1;
+                    //                    next();
+                    //                } else {
+                    //                    AttributeDef ad_tmp;
+                    //                    int itmp;
+                    //                    CType cur_type;
+                    //                    parse_btype(&cur_type, &ad_tmp);
+                    //                    type_decl(&cur_type, &ad_tmp, &itmp, TYPE_ABSTRACT);
+                    //                    if (compare_types(&controlling_type, &cur_type, 0)) {
+                    //                        if (has_match) {
+                    //                            tcc_error("type match twice");
+                    //                        }
+                    //                        has_match = 1;
+                    //                        learn = 1;
+                    //                    }
+                    //                }
+                    //                skip(':');
+                    //                if (learn) {
+                    //                    if (str)
+                    //                        tok_str_free(str);
+                    //                    skip_or_save_block(&str);
+                    //                } else {
+                    //                    skip_or_save_block(NULL);
+                    //                }
+                    //                if (tok == ')')
+                    //                    break;
+                    //            }
+                    //            if (!str) {
+                    //                char buf[60];
+                    //                type_to_str(buf, sizeof buf, &controlling_type, NULL);
+                    //                tcc_error("type '%s' does not match any association", buf);
+                    //            }
+                    //            begin_macro(str, 1);
+                    //            next();
+                    //            expr_eq();
+                    //            if (tok != TOK_EOF)
+                    //                expect(",");
+                    //            end_macro();
+                    //            next();
+                    //            break;
+                    //        }
+                    //        // special qnan , snan and infinity values
+                    //    case TOK___NAN__:
+                    //        vpush64(VT_DOUBLE, 0x7ff8000000000000ULL);
+                    //        next();
+                    //        break;
+                    //    case TOK___SNAN__:
+                    //        vpush64(VT_DOUBLE, 0x7ff0000000000001ULL);
+                    //        next();
+                    //        break;
+                    //    case TOK___INF__:
+                    //        vpush64(VT_DOUBLE, 0x7ff0000000000000ULL);
+                    //        next();
+                    //        break;
+
+                    //    default:
+                    //tok_identifier:
+                    //        t = tok;
+                    //        next();
+                    //        if (t < TOK_UIDENT)
+                    //            expect("identifier");
+                    //        s = sym_find(t);
+                    //        if (!s || IS_ASM_SYM(s)) {
+                    //            const char *name = get_tok_str(t, NULL);
+                    //            if (tok != '(')
+                    //                tcc_error("'%s' undeclared", name);
+                    //            /* for simple function calls, we tolerate undeclared
+                    //            external reference to int() function */
+                    //            if (tcc_state->warn_implicit_function_declaration
+                    //#ifdef TCC_TARGET_PE
+                    //                /* people must be warned about using undeclared WINAPI functions
+                    //                (which usually start with uppercase letter) */
+                    //                || (name[0] >= 'A' && name[0] <= 'Z')
+                    //#endif
+                    //                )
+                    //                tcc_warning("implicit declaration of function '%s'", name);
+                    //            s = external_global_sym(t, &func_old_type, 0); 
+                    //        }
+
+                    //        r = s->r;
+                    //        /* A symbol that has a register is a local register variable,
+                    //        which starts out as VT_LOCAL value.  */
+                    //        if ((r & VT_VALMASK) < VT_CONST)
+                    //            r = (r & ~VT_VALMASK) | VT_LOCAL;
+
+                    //        vset(&s->type, r, s->c);
+                    //        /* Point to s as backpointer (even without r&VT_SYM).
+                    //        Will be used by at least the x86 inline asm parser for
+                    //        regvars.  */
+                    //        vtop->sym = s;
+
+                    //        if (r & VT_SYM) {
+                    //            vtop->c.i = 0;
+                    //        } else if (r == VT_CONST && IS_ENUM_VAL(s->type.t)) {
+                    //            vtop->c.i = s->enum_val;
+                    //        }
+                    break;
+            }
+
+            /* post operations */
+            //    while (1) {
+            //        if (tok == TOK_INC || tok == TOK_DEC) {
+            //            inc(1, tok);
+            //            next();
+            //        } else if (tok == '.' || tok == TOK_ARROW || tok == TOK_CDOUBLE) {
+            //            int qualifiers;
+            //            /* field */ 
+            //            if (tok == TOK_ARROW) 
+            //                indir();
+            //            qualifiers = vtop->type.t & (VT_CONSTANT | VT_VOLATILE);
+            //            test_lvalue();
+            //            gaddrof();
+            //            /* expect pointer on structure */
+            //            if ((vtop->type.t & VT_BTYPE) != VT_STRUCT)
+            //                expect("struct or union");
+            //            if (tok == TOK_CDOUBLE)
+            //                expect("field name");
+            //            next();
+            //            if (tok == TOK_CINT || tok == TOK_CUINT)
+            //                expect("field name");
+            //            s = find_field(&vtop->type, tok);
+            //            if (!s)
+            //                tcc_error("field not found: %s",  get_tok_str(tok & ~SYM_FIELD, &tokc));
+            //            /* add field offset to pointer */
+            //            vtop->type = char_pointer_type; /* change type to 'char *' */
+            //            vpushi(s->c);
+            //            gen_op('+');
+            //            /* change type to field type, and set to lvalue */
+            //            vtop->type = s->type;
+            //            vtop->type.t |= qualifiers;
+            //            /* an array is never an lvalue */
+            //            if (!(vtop->type.t & VT_ARRAY)) {
+            //                vtop->r |= lvalue_type(vtop->type.t);
+            //#ifdef CONFIG_TCC_BCHECK
+            //                /* if bound checking, the referenced pointer must be checked */
+            //                if (tcc_state->do_bounds_check && (vtop->r & VT_VALMASK) != VT_LOCAL)
+            //                    vtop->r |= VT_MUSTBOUND;
+            //#endif
+            //            }
+            //            next();
+            //        } else if (tok == '[') {
+            //            next();
+            //            gexpr();
+            //            gen_op('+');
+            //            indir();
+            //            skip(']');
+            //        } else if (tok == '(') {
+            //            SValue ret;
+            //            Sym *sa;
+            //            int nb_args, ret_nregs, ret_align, regsize, variadic;
+
+            //            /* function call  */
+            //            if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
+            //                /* pointer test (no array accepted) */
+            //                if ((vtop->type.t & (VT_BTYPE | VT_ARRAY)) == VT_PTR) {
+            //                    vtop->type = *pointed_type(&vtop->type);
+            //                    if ((vtop->type.t & VT_BTYPE) != VT_FUNC)
+            //                        goto error_func;
+            //                } else {
+            //error_func:
+            //                    expect("function pointer");
+            //                }
+            //            } else {
+            //                vtop->r &= ~VT_LVAL; /* no lvalue */
+            //            }
+            //            /* get return type */
+            //            s = vtop->type.ref;
+            //            next();
+            //            sa = s->next; /* first parameter */
+            //            nb_args = regsize = 0;
+            //            ret.r2 = VT_CONST;
+            //            /* compute first implicit argument if a structure is returned */
+            //            if ((s->type.t & VT_BTYPE) == VT_STRUCT) {
+            //                variadic = (s->f.func_type == FUNC_ELLIPSIS);
+            //                ret_nregs = gfunc_sret(&s->type, variadic, &ret.type,
+            //                    &ret_align, &regsize);
+            //                if (!ret_nregs) {
+            //                    /* get some space for the returned structure */
+            //                    size = type_size(&s->type, &align);
+            //#ifdef TCC_TARGET_ARM64
+            //                    /* On arm64, a small struct is return in registers.
+            //                    It is much easier to write it to memory if we know
+            //                    that we are allowed to write some extra bytes, so
+            //                    round the allocated space up to a power of 2: */
+            //                    if (size < 16)
+            //                        while (size & (size - 1))
+            //                            size = (size | (size - 1)) + 1;
+            //#endif
+            //                    loc = (loc - size) & -align;
+            //                    ret.type = s->type;
+            //                    ret.r = VT_LOCAL | VT_LVAL;
+            //                    /* pass it as 'int' to avoid structure arg passing
+            //                    problems */
+            //                    vseti(VT_LOCAL, loc);
+            //                    ret.c = vtop->c;
+            //                    nb_args++;
+            //                }
+            //            } else {
+            //                ret_nregs = 1;
+            //                ret.type = s->type;
+            //            }
+
+            //            if (ret_nregs) {
+            //                /* return in register */
+            //                if (is_float(ret.type.t)) {
+            //                    ret.r = reg_fret(ret.type.t);
+            //#ifdef TCC_TARGET_X86_64
+            //                    if ((ret.type.t & VT_BTYPE) == VT_QFLOAT)
+            //                        ret.r2 = REG_QRET;
+            //#endif
+            //                } else {
+            //#ifndef TCC_TARGET_ARM64
+            //#ifdef TCC_TARGET_X86_64
+            //                    if ((ret.type.t & VT_BTYPE) == VT_QLONG)
+            //#else
+            //                    if ((ret.type.t & VT_BTYPE) == VT_LLONG)
+            //#endif
+            //                        ret.r2 = REG_LRET;
+            //#endif
+            //                    ret.r = REG_IRET;
+            //                }
+            //                ret.c.i = 0;
+            //            }
+            //            if (tok != ')') {
+            //                for(;;) {
+            //                    expr_eq();
+            //                    gfunc_param_typed(s, sa);
+            //                    nb_args++;
+            //                    if (sa)
+            //                        sa = sa->next;
+            //                    if (tok == ')')
+            //                        break;
+            //                    skip(',');
+            //                }
+            //            }
+            //            if (sa)
+            //                tcc_error("too few arguments to function");
+            //            skip(')');
+            //            gfunc_call(nb_args);
+
+            //            /* return value */
+            //            for (r = ret.r + ret_nregs + !ret_nregs; r-- > ret.r;) {
+            //                vsetc(&ret.type, r, &ret.c);
+            //                vtop->r2 = ret.r2; /* Loop only happens when r2 is VT_CONST */
+            //            }
+
+            //            /* handle packed struct return */
+            //            if (((s->type.t & VT_BTYPE) == VT_STRUCT) && ret_nregs) {
+            //                int addr, offset;
+
+            //                size = type_size(&s->type, &align);
+            //                /* We're writing whole regs often, make sure there's enough
+            //                space.  Assume register size is power of 2.  */
+            //                if (regsize > align)
+            //                    align = regsize;
+            //                loc = (loc - size) & -align;
+            //                addr = loc;
+            //                offset = 0;
+            //                for (;;) {
+            //                    vset(&ret.type, VT_LOCAL | VT_LVAL, addr + offset);
+            //                    vswap();
+            //                    vstore();
+            //                    vtop--;
+            //                    if (--ret_nregs == 0)
+            //                        break;
+            //                    offset += regsize;
+            //                }
+            //                vset(&s->type, VT_LOCAL | VT_LVAL, addr);
+            //            }
+            //        } else {
+            //            break;
+            //        }
+            //    }
+        }
+
+        public void expr_prod()
+        {
+            int t;
+
+            unary();
+            //while (tok == '*' || tok == '/' || tok == '%')
+            //{
+            //    t = tok;
+            //    next();
+            //    unary();
+            //    gen_op(t);
+            //}
+        }
+
+        public void expr_sum()
+        {
+            int t;
+
+            expr_prod();
+            //while (tok == '+' || tok == '-')
+            //{
+            //    t = tok;
+            //    next();
+            //    expr_prod();
+            //    gen_op(t);
+            //}
+        }
+
+        public void expr_shift()
+        {
+            int t;
+
+            expr_sum();
+            //while (tok == TOK_SHL || tok == TOK_SAR)
+            //{
+            //    t = tok;
+            //    next();
+            //    expr_sum();
+            //    gen_op(t);
+            //}
+        }
+
+        public void expr_cmp()
+        {
+            int t;
+
+            expr_shift();
+            //while ((tok >= TOK_ULE && tok <= TOK_GT) ||
+            //    tok == TOK_ULT || tok == TOK_UGE)
+            //{
+            //    t = tok;
+            //    next();
+            //    expr_shift();
+            //    gen_op(t);
+            //}
+        }
+
+        public void expr_cmpeq()
+        {
+            int t;
+
+            expr_cmp();
+            //while (tok == TOK_EQ || tok == TOK_NE)
+            //{
+            //    t = tok;
+            //    next();
+            //    expr_cmp();
+            //    gen_op(t);
+            //}
+        }
+
+        public void expr_and()
+        {
+            expr_cmpeq();
+            //while (tok == '&')
+            //{
+            //    next();
+            //    expr_cmpeq();
+            //    gen_op('&');
+            //}
+        }
+
+        public void expr_xor()
+        {
+            expr_and();
+            //while (tok == '^')
+            //{
+            //    next();
+            //    expr_and();
+            //    gen_op('^');
+            //}
+        }
+
+        public void expr_or()
+        {
+            expr_xor();
+            //while (tok == '|')
+            //{
+            //    next();
+            //    expr_xor();
+            //    gen_op('|');
+            //}
+        }
+
+        public void expr_land()
+        {
+            expr_or();
+            if (prep.tok == (int)TPTOKEN.TOK_LAND)
+            {
+                //    int t = 0;
+                //    for (; ; )
+                //    {
+                //        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST)
+                //        {
+                //            gen_cast_s(VT_BOOL);
+                //            if (vtop->c.i)
+                //            {
+                //                vpop();
+                //            }
+                //            else
+                //            {
+                //                nocode_wanted++;
+                //                while (tok == TOK_LAND)
+                //                {
+                //                    next();
+                //                    expr_or();
+                //                    vpop();
+                //                }
+                //                nocode_wanted--;
+                //                if (t)
+                //                    gsym(t);
+                //                gen_cast_s(VT_INT);
+                //                break;
+                //            }
+                //        }
+                //        else
+                //        {
+                //            if (!t)
+                //                save_regs(1);
+                //            t = gvtst(1, t);
+                //        }
+                //        if (tok != TOK_LAND)
+                //        {
+                //            if (t)
+                //                vseti(VT_JMPI, t);
+                //            else
+                //                vpushi(1);
+                //            break;
+                //        }
+                //        next();
+                //        expr_or();
+                //    }
+            }
+        }
+
+        public void expr_lor()
+        {
+            expr_land();
+            if (prep.tok == (int)TPTOKEN.TOK_LOR)
+            {
+                //    int t = 0;
+                //    for (; ; )
+                //    {
+                //        if ((vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST)
+                //        {
+                //            gen_cast_s(VT_BOOL);
+                //            if (!vtop->c.i)
+                //            {
+                //                vpop();
+                //            }
+                //            else
+                //            {
+                //                nocode_wanted++;
+                //                while (tok == TOK_LOR)
+                //                {
+                //                    next();
+                //                    expr_land();
+                //                    vpop();
+                //                }
+                //                nocode_wanted--;
+                //                if (t)
+                //                    gsym(t);
+                //                gen_cast_s(VT_INT);
+                //                break;
+                //            }
+                //        }
+                //        else
+                //        {
+                //            if (!t)
+                //                save_regs(1);
+                //            t = gvtst(0, t);
+                //        }
+                //        if (tok != TOK_LOR)
+                //        {
+                //            if (t)
+                //                vseti(VT_JMP, t);
+                //            else
+                //                vpushi(0);
+                //            break;
+                //        }
+                //        next();
+                //        expr_land();
+                //    }
+            }
+        }
+
         public void condition_3way() { }
-        public void expr_cond() { }
-        public void expr_eq() { }
-        public void gexpr() { }
+
+        public void expr_cond()
+        {
+            int tt;
+            int u;
+            int r1;
+            int r2;
+            int rc;
+            int t1;
+            int t2;
+            int bt1;
+            int bt2;
+            int islv;
+            int c;
+            int g;
+            SValue sv;
+            CType type;
+            CType type1;
+            CType type2;
+
+            expr_lor();
+            if (prep.tok == '?')
+            {
+                //        next();
+                //        c = condition_3way();
+                //        g = (tok == ':' && gnu_ext);
+                //        if (c < 0) {
+                //            /* needed to avoid having different registers saved in
+                //            each branch */
+                //            if (is_float(vtop->type.t)) {
+                //                rc = RC_FLOAT;
+                //#ifdef TCC_TARGET_X86_64
+                //                if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
+                //                    rc = RC_ST0;
+                //                }
+                //#endif
+                //            } else
+                //                rc = RC_INT;
+                //            gv(rc);
+                //            save_regs(1);
+                //            if (g)
+                //                gv_dup();
+                //            tt = gvtst(1, 0);
+
+                //        } else {
+                //            if (!g)
+                //                vpop();
+                //            tt = 0;
+                //        }
+
+                //        if (1) {
+                //            if (c == 0)
+                //                nocode_wanted++;
+                //            if (!g)
+                //                gexpr();
+
+                //            type1 = vtop->type;
+                //            sv = *vtop; /* save value to handle it later */
+                //            vtop--; /* no vpop so that FP stack is not flushed */
+                //            skip(':');
+
+                //            u = 0;
+                //            if (c < 0)
+                //                u = gjmp(0);
+                //            gsym(tt);
+
+                //            if (c == 0)
+                //                nocode_wanted--;
+                //            if (c == 1)
+                //                nocode_wanted++;
+                //            expr_cond();
+                //            if (c == 1)
+                //                nocode_wanted--;
+
+                //            type2 = vtop->type;
+                //            t1 = type1.t;
+                //            bt1 = t1 & VT_BTYPE;
+                //            t2 = type2.t;
+                //            bt2 = t2 & VT_BTYPE;
+                //            type.ref = NULL;
+
+                //            /* cast operands to correct type according to ISOC rules */
+                //            if (is_float(bt1) || is_float(bt2)) {
+                //                if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
+                //                    type.t = VT_LDOUBLE;
+
+                //                } else if (bt1 == VT_DOUBLE || bt2 == VT_DOUBLE) {
+                //                    type.t = VT_DOUBLE;
+                //                } else {
+                //                    type.t = VT_FLOAT;
+                //                }
+                //            } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
+                //                /* cast to biggest op */
+                //                type.t = VT_LLONG | VT_LONG;
+                //                if (bt1 == VT_LLONG)
+                //                    type.t &= t1;
+                //                if (bt2 == VT_LLONG)
+                //                    type.t &= t2;
+                //                /* convert to unsigned if it does not fit in a long long */
+                //                if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED) ||
+                //                    (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED))
+                //                    type.t |= VT_UNSIGNED;
+                //            } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
+                //                /* If one is a null ptr constant the result type
+                //                is the other.  */
+                //                if (is_null_pointer (vtop))
+                //                    type = type1;
+                //                else if (is_null_pointer (&sv))
+                //                    type = type2;
+                //                /* XXX: test pointer compatibility, C99 has more elaborate
+                //                rules here.  */
+                //                else
+                //                    type = type1;
+                //            } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
+                //                /* XXX: test function pointer compatibility */
+                //                type = bt1 == VT_FUNC ? type1 : type2;
+                //            } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
+                //                /* XXX: test structure compatibility */
+                //                type = bt1 == VT_STRUCT ? type1 : type2;
+                //            } else if (bt1 == VT_VOID || bt2 == VT_VOID) {
+                //                /* NOTE: as an extension, we accept void on only one side */
+                //                type.t = VT_VOID;
+                //            } else {
+                //                /* integer operations */
+                //                type.t = VT_INT | (VT_LONG & (t1 | t2));
+                //                /* convert to unsigned if it does not fit in an integer */
+                //                if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED) ||
+                //                    (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED))
+                //                    type.t |= VT_UNSIGNED;
+                //            }
+                //            /* keep structs lvalue by transforming `(expr ? a : b)` to `*(expr ? &a : &b)` so
+                //            that `(expr ? a : b).mem` does not error  with "lvalue expected" */
+                //            islv = (vtop->r & VT_LVAL) && (sv.r & VT_LVAL) && VT_STRUCT == (type.t & VT_BTYPE);
+                //            islv &= c < 0;
+
+                //            /* now we convert second operand */
+                //            if (c != 1) {
+                //                gen_cast(&type);
+                //                if (islv) {
+                //                    mk_pointer(&vtop->type);
+                //                    gaddrof();
+                //                } else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
+                //                    gaddrof();
+                //            }
+
+                //            rc = RC_INT;
+                //            if (is_float(type.t)) {
+                //                rc = RC_FLOAT;
+                //#ifdef TCC_TARGET_X86_64
+                //                if ((type.t & VT_BTYPE) == VT_LDOUBLE) {
+                //                    rc = RC_ST0;
+                //                }
+                //#endif
+                //            } else if ((type.t & VT_BTYPE) == VT_LLONG) {
+                //                /* for long longs, we use fixed registers to avoid having
+                //                to handle a complicated move */
+                //                rc = RC_IRET;
+                //            }
+
+                //            tt = r2 = 0;
+                //            if (c < 0) {
+                //                r2 = gv(rc);
+                //                tt = gjmp(0);
+                //            }
+                //            gsym(u);
+
+                //            /* this is horrible, but we must also convert first
+                //            operand */
+                //            if (c != 0) {
+                //                *vtop = sv;
+                //                gen_cast(&type);
+                //                if (islv) {
+                //                    mk_pointer(&vtop->type);
+                //                    gaddrof();
+                //                } else if (VT_STRUCT == (vtop->type.t & VT_BTYPE))
+                //                    gaddrof();
+                //            }
+
+                //            if (c < 0) {
+                //                r1 = gv(rc);
+                //                move_reg(r2, r1, type.t);
+                //                vtop->r = r2;
+                //                gsym(tt);
+                //                if (islv)
+                //                    indir();
+                //            }
+                //        }
+            }
+
+        }
+
+        public void expr_eq()
+        {
+            int t;
+
+            expr_cond();
+            if (prep.tok == '=' ||
+                (prep.tok >= (int)TPTOKEN.TOK_A_MOD && prep.tok <= (int)TPTOKEN.TOK_A_DIV) ||
+                prep.tok == (int)TPTOKEN.TOK_A_XOR || prep.tok == (int)TPTOKEN.TOK_A_OR ||
+                prep.tok == (int)TPTOKEN.TOK_A_SHL || prep.tok == (int)TPTOKEN.TOK_A_SAR)
+            {
+                //test_lvalue();
+                //t = prep.tok;
+                //prep.next();
+                //if (t == '=')
+                //{
+                //    expr_eq();
+                //}
+                //else
+                //{
+                //    vdup();
+                //    expr_eq();
+                //    gen_op(t & 0x7f);
+                //}
+                //vstore();
+            }
+        }
+
+        public void gexpr()
+        {
+            while (true)
+            {
+                expr_eq();
+                if (prep.tok != ',')
+                    break;
+                vpop();
+                prep.next();
+            }
+        }
+
         public void expr_const1() { }
         public void expr_const64() { }
         public void expr_const() { }
+
+        //- statements ----------------------------------------------------------------
+
         public void is_label() { }
         public void gfunc_return() { }
         public void case_cmp() { }
         public void gcase() { }
-        public void block() { }
+
+        public void block(ref int bsym, ref int csym, bool is_expr)
+        {
+            int a;
+            int b;
+            int c;
+            int d;
+            int cond;
+            Sym s;
+
+            /* generate line number info */
+            //    if (tcc_state->do_debug)
+            //        tcc_debug_line(tcc_state);
+
+            if (is_expr)
+            {
+                //        /* default return value is (void) */
+                //        vpushi(0);
+                //        vtop->type.t = VT_VOID;
+            }
+
+            if (prep.tok == (int)TPTOKEN.TOK_IF)
+            {
+                //        /* if test */
+                //        int saved_nocode_wanted = nocode_wanted;
+                //        next();
+                //        skip('(');
+                //        gexpr();
+                //        skip(')');
+                //        cond = condition_3way();
+                //        if (cond == 1)
+                //            a = 0, vpop();
+                //        else
+                //            a = gvtst(1, 0);
+                //        if (cond == 0)
+                //            nocode_wanted |= 0x20000000;
+                //        block(bsym, csym, 0);
+                //        if (cond != 1)
+                //            nocode_wanted = saved_nocode_wanted;
+                //        c = tok;
+                //        if (c == TOK_ELSE) {
+                //            next();
+                //            d = gjmp(0);
+                //            gsym(a);
+                //            if (cond == 1)
+                //                nocode_wanted |= 0x20000000;
+                //            block(bsym, csym, 0);
+                //            gsym(d); /* patch else jmp */
+                //            if (cond != 0)
+                //                nocode_wanted = saved_nocode_wanted;
+                //        } else
+                //            gsym(a);
+            }
+            else if (prep.tok == (int)TPTOKEN.TOK_WHILE)
+            {
+                //        int saved_nocode_wanted;
+                //        nocode_wanted &= ~0x20000000;
+                //        next();
+                //        d = ind;
+                //        vla_sp_restore();
+                //        skip('(');
+                //        gexpr();
+                //        skip(')');
+                //        a = gvtst(1, 0);
+                //        b = 0;
+                //        ++local_scope;
+                //        saved_nocode_wanted = nocode_wanted;
+                //        block(&a, &b, 0);
+                //        nocode_wanted = saved_nocode_wanted;
+                //        --local_scope;
+                //        gjmp_addr(d);
+                //        gsym(a);
+                //        gsym_addr(b, d);
+            }
+            else if (prep.tok == '{')
+            {
+                Sym llabel;
+                //        int block_vla_sp_loc = vla_sp_loc, saved_vlas_in_scope = vlas_in_scope;
+
+                prep.next();
+                /* record local declaration stack position */
+                //        s = local_stack;
+                //        llabel = local_label_stack;
+                //        ++local_scope;
+
+                /* handle local labels declarations */
+                //        if (tok == TOK_LABEL) {
+                //            next();
+                //            for(;;) {
+                //                if (tok < TOK_UIDENT)
+                //                    expect("label identifier");
+                //                label_push(&local_label_stack, tok, LABEL_DECLARED);
+                //                next();
+                //                if (tok == ',') {
+                //                    next();
+                //                } else {
+                //                    skip(';');
+                //                    break;
+                //                }
+                //            }
+                //        }
+                while (prep.tok != '}')
+                {
+                    //            if ((a = is_label()))
+                    //                unget_tok(a);
+                    //            else
+                    //                decl(VT_LOCAL);
+                    if (prep.tok != '}')
+                    {
+                        //                if (is_expr)
+                        //                    vpop();
+                        block(ref bsym, ref csym, is_expr);
+                    }
+                }
+                /* pop locally defined labels */
+                //        label_pop(&local_label_stack, llabel, is_expr);
+                /* pop locally defined symbols */
+                //        --local_scope;
+                /* In the is_expr case (a statement expression is finished here),
+                vtop might refer to symbols on the local_stack.  Either via the
+                type or via vtop->sym.  We can't pop those nor any that in turn
+                might be referred to.  To make it easier we don't roll back
+                any symbols in that case; some upper level call to block() will
+                do that.  We do have to remove such symbols from the lookup
+                tables, though.  sym_pop will do that.  */
+                //        sym_pop(&local_stack, s, is_expr);
+
+                //        /* Pop VLA frames and restore stack pointer if required */
+                //        if (vlas_in_scope > saved_vlas_in_scope) {
+                //            vla_sp_loc = saved_vlas_in_scope ? block_vla_sp_loc : vla_sp_root_loc;
+                //            vla_sp_restore();
+                //        }
+                //        vlas_in_scope = saved_vlas_in_scope;
+
+                prep.next();
+            }
+            else if (prep.tok == (int)TPTOKEN.TOK_RETURN)
+            {
+                prep.next();
+                if (prep.tok != ';')
+                {
+                    gexpr();
+                    //            gen_assign_cast(&func_vt);
+                    //            if ((func_vt.t & VT_BTYPE) == VT_VOID)
+                    //                vtop--;
+                    //            else
+                    //                gfunc_return(&func_vt);
+                }
+                prep.skip(';');
+                /* jump unless last stmt in top-level block */
+                //        if (tok != '}' || local_scope != 1)
+                //            rsym = gjmp(rsym);
+                //                    nocode_wanted |= 0x20000000;
+            }
+            else if (prep.tok == (int)TPTOKEN.TOK_BREAK)
+            {
+                //        /* compute jump */
+                //        if (!bsym)
+                //            tcc_error("cannot break");
+                //        *bsym = gjmp(*bsym);
+                //        next();
+                //        skip(';');
+                //        nocode_wanted |= 0x20000000;
+            }
+            else if (prep.tok == (int)TPTOKEN.TOK_CONTINUE)
+            {
+                //        /* compute jump */
+                //        if (!csym)
+                //            tcc_error("cannot continue");
+                //        vla_sp_restore_root();
+                //        *csym = gjmp(*csym);
+                //        next();
+                //        skip(';');
+            }
+            else if (prep.tok == (int)TPTOKEN.TOK_FOR)
+            {
+                //        int e;
+                //        int saved_nocode_wanted;
+                //        nocode_wanted &= ~0x20000000;
+                //        next();
+                //        skip('(');
+                //        s = local_stack;
+                //        ++local_scope;
+                //        if (tok != ';') {
+                //            /* c99 for-loop init decl? */
+                //            if (!decl0(VT_LOCAL, 1, NULL)) {
+                //                /* no, regular for-loop init expr */
+                //                gexpr();
+                //                vpop();
+                //            }
+                //        }
+                //        skip(';');
+                //        d = ind;
+                //        c = ind;
+                //        vla_sp_restore();
+                //        a = 0;
+                //        b = 0;
+                //        if (tok != ';') {
+                //            gexpr();
+                //            a = gvtst(1, 0);
+                //        }
+                //        skip(';');
+                //        if (tok != ')') {
+                //            e = gjmp(0);
+                //            c = ind;
+                //            vla_sp_restore();
+                //            gexpr();
+                //            vpop();
+                //            gjmp_addr(d);
+                //            gsym(e);
+                //        }
+                //        skip(')');
+                //        saved_nocode_wanted = nocode_wanted;
+                //        block(&a, &b, 0);
+                //        nocode_wanted = saved_nocode_wanted;
+                //        gjmp_addr(c);
+                //        gsym(a);
+                //        gsym_addr(b, c);
+                //        --local_scope;
+                //        sym_pop(&local_stack, s, 0);
+
+            }
+            else
+                if (prep.tok == (int)TPTOKEN.TOK_DO)
+                {
+                    //            int saved_nocode_wanted;
+                    //            nocode_wanted &= ~0x20000000;
+                    //            next();
+                    //            a = 0;
+                    //            b = 0;
+                    //            d = ind;
+                    //            vla_sp_restore();
+                    //            saved_nocode_wanted = nocode_wanted;
+                    //            block(&a, &b, 0);
+                    //            skip(TOK_WHILE);
+                    //            skip('(');
+                    //            gsym(b);
+                    //            gexpr();
+                    //            c = gvtst(0, 0);
+                    //            gsym_addr(c, d);
+                    //            nocode_wanted = saved_nocode_wanted;
+                    //            skip(')');
+                    //            gsym(a);
+                    //            skip(';');
+                }
+                else
+                    if (prep.tok == (int)TPTOKEN.TOK_SWITCH)
+                    {
+                        //                struct switch_t *saved, sw;
+                        //                int saved_nocode_wanted = nocode_wanted;
+                        //                SValue switchval;
+                        //                next();
+                        //                skip('(');
+                        //                gexpr();
+                        //                skip(')');
+                        //                switchval = *vtop--;
+                        //                a = 0;
+                        //                b = gjmp(0); /* jump to first case */
+                        //                sw.p = NULL; sw.n = 0; sw.def_sym = 0;
+                        //                saved = cur_switch;
+                        //                cur_switch = &sw;
+                        //                block(&a, csym, 0);
+                        //                nocode_wanted = saved_nocode_wanted;
+                        //                a = gjmp(a); /* add implicit break */
+                        //                /* case lookup */
+                        //                gsym(b);
+                        //                qsort(sw.p, sw.n, sizeof(void*), case_cmp);
+                        //                for (b = 1; b < sw.n; b++)
+                        //                    if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
+                        //                        tcc_error("duplicate case value");
+                        //                /* Our switch table sorting is signed, so the compared
+                        //                value needs to be as well when it's 64bit.  */
+                        //                if ((switchval.type.t & VT_BTYPE) == VT_LLONG)
+                        //                    switchval.type.t &= ~VT_UNSIGNED;
+                        //                vpushv(&switchval);
+                        //                gcase(sw.p, sw.n, &a);
+                        //                vpop();
+                        //                if (sw.def_sym)
+                        //                    gjmp_addr(sw.def_sym);
+                        //                dynarray_reset(&sw.p, &sw.n);
+                        //                cur_switch = saved;
+                        //                /* break label */
+                        //                gsym(a);
+                    }
+                    else
+                        if (prep.tok == (int)TPTOKEN.TOK_CASE)
+                        {
+                            //                    struct case_t *cr = tcc_malloc(sizeof(struct case_t));
+                            //                    if (!cur_switch)
+                            //                        expect("switch");
+                            //                    nocode_wanted &= ~0x20000000;
+                            //                    next();
+                            //                    cr->v1 = cr->v2 = expr_const64();
+                            //                    if (gnu_ext && tok == TOK_DOTS) {
+                            //                        next();
+                            //                        cr->v2 = expr_const64();
+                            //                        if (cr->v2 < cr->v1)
+                            //                            tcc_warning("empty case range");
+                            //                    }
+                            //                    cr->sym = ind;
+                            //                    dynarray_add(&cur_switch->p, &cur_switch->n, cr);
+                            //                    skip(':');
+                            //                    is_expr = 0;
+                            //                    goto block_after_label;
+                        }
+                        else
+                            if (prep.tok == (int)TPTOKEN.TOK_DEFAULT)
+                            {
+                                //                        next();
+                                //                        skip(':');
+                                //                        if (!cur_switch)
+                                //                            expect("switch");
+                                //                        if (cur_switch->def_sym)
+                                //                            tcc_error("too many 'default'");
+                                //                        cur_switch->def_sym = ind;
+                                //                        is_expr = 0;
+                                //                        goto block_after_label;
+                            }
+                            else
+                                if (prep.tok == (int)TPTOKEN.TOK_GOTO)
+                                {
+                                    //                            next();
+                                    //                            if (tok == '*' && gnu_ext) {
+                                    //                                /* computed goto */
+                                    //                                next();
+                                    //                                gexpr();
+                                    //                                if ((vtop->type.t & VT_BTYPE) != VT_PTR)
+                                    //                                    expect("pointer");
+                                    //                                ggoto();
+                                    //                            } else if (tok >= TOK_UIDENT) {
+                                    //                                s = label_find(tok);
+                                    //                                /* put forward definition if needed */
+                                    //                                if (!s) {
+                                    //                                    s = label_push(&global_label_stack, tok, LABEL_FORWARD);
+                                    //                                } else {
+                                    //                                    if (s->r == LABEL_DECLARED)
+                                    //                                        s->r = LABEL_FORWARD;
+                                    //                                }
+                                    //                                vla_sp_restore_root();
+                                    //                                if (s->r & LABEL_FORWARD)
+                                    //                                    s->jnext = gjmp(s->jnext);
+                                    //                                else
+                                    //                                    gjmp_addr(s->jnext);
+                                    //                                next();
+                                    //                            } else {
+                                    //                                expect("label identifier");
+                                    //                            }
+                                    //                            skip(';');
+                                }
+                                else if (prep.tok == (int)TPTOKEN.TOK_ASM1 || prep.tok == (int)TPTOKEN.TOK_ASM2
+                                    || prep.tok == (int)TPTOKEN.TOK_ASM3)
+                                {
+                                    //                            asm_instr();
+                                }
+                                else
+                                {
+                                    //                            b = is_label();
+                                    //                            if (b) {
+                                    //                                /* label case */
+                                    //                                next();
+                                    //                                s = label_find(b);
+                                    //                                if (s) {
+                                    //                                    if (s->r == LABEL_DEFINED)
+                                    //                                        tcc_error("duplicate label '%s'", get_tok_str(s->v, NULL));
+                                    //                                    gsym(s->jnext);
+                                    //                                    s->r = LABEL_DEFINED;
+                                    //                                } else {
+                                    //                                    s = label_push(&global_label_stack, b, LABEL_DEFINED);
+                                    //                                }
+                                    //                                s->jnext = ind;
+                                    //                                vla_sp_restore();
+                                    /* we accept this, but it is a mistake */
+                                    //block_after_label:
+                                    //                                nocode_wanted &= ~0x20000000;
+                                    //                                if (tok == '}') {
+                                    //                                    tcc_warning("deprecated use of label at end of compound statement");
+                                    //                                } else {
+                                    //                                    if (is_expr)
+                                    //                                        vpop();
+                                    //                                    block(bsym, csym, is_expr);
+                                    //                                }
+                                    //                            } else {
+                                    //                                /* expression case */
+                                    //                                if (tok != ';') {
+                                    //                                    if (is_expr) {
+                                    //                                        vpop();
+                                    //                                        gexpr();
+                                    //                                    } else {
+                                    //                                        gexpr();
+                                    //                                        vpop();
+                                    //                                    }
+                                    //                                }
+                                    //                                skip(';');
+                                    //                            }
+                                }
+        }
+
         public void skip_or_save_block() { }
         public void parse_init_elem() { }
         public void init_putz() { }
@@ -1051,39 +2665,41 @@ namespace TidePool
 
         public void gen_function(Sym sym)
         {
-            //    nocode_wanted = 0;
-            //    ind = curTextSection->data_offset;
-            
+            nocode_wanted = false;
+            ind = Section.curTextSection.data_offset;
+
             /* NOTE: we patch the symbol size later */
-            //    put_extern_sym(sym, curTextSection, ind, 0);
-            //    funcname = get_tok_str(sym->v, NULL);
-            //    func_ind = ind;
-            
+            //put_extern_sym(sym, Section.curTextSection, ind, 0);
+            //funcname = get_tok_str(sym->v, NULL);
+            func_ind = ind;
+
             /* Initialize VLA state */
             //    vla_sp_loc = -1;
             //    vla_sp_root_loc = -1;
-            
+
             /* put debug symbol */
             //    tcc_debug_funcstart(tcc_state, sym);
-            
+
             /* push a dummy symbol to enable local sym storage */
             //    sym_push2(&local_stack, SYM_FIELD, 0, 0);
             //    local_scope = 1; /* for function parameters */
             //    gfunc_prolog(&sym->type);
             //    local_scope = 0;
             //    rsym = 0;
-            //    block(NULL, NULL, 0);
-            //    nocode_wanted = 0;
+            int bsym = 0;       //dummy init vals
+            int csym = 0;
+            block(ref bsym, ref csym, false);
+            nocode_wanted = false;
             //    gsym(rsym);
             //    gfunc_epilog();
-            //    curTextSection->data_offset = ind;
+            //    Section.curTextSection->data_offset = ind;
             //    label_pop(&global_label_stack, NULL, 0);
-            
+
             /* reset local stack */
             //    local_scope = 0;
             //    sym_pop(&local_stack, NULL, 0);
-            
-            /* end of function */            
+
+            /* end of function */
             /* patch symbol size */
             //    elfsym(sym)->st_size = ind - func_ind;
             //    tcc_debug_funcend(tcc_state, ind - func_ind);
@@ -1119,28 +2735,34 @@ namespace TidePool
                     if (is_for_loop_init)
                         return 0;
 
-                                /* skip redundant ';' if not in old parameter decl scope */
-                                if (prep.tok == ';' && l != VT_CMP) {
-                                    prep.next();
-                                    continue;
-                                }
-                                if (l != VT_CONST)
-                                    break;
+                    /* skip redundant ';' if not in old parameter decl scope */
+                    if (prep.tok == ';' && l != VT_CMP)
+                    {
+                        prep.next();
+                        continue;
+                    }
+                    if (l != VT_CONST)
+                        break;
 
-                    //            if (tok == TOK_ASM1 || tok == TOK_ASM2 || tok == TOK_ASM3) {
-                    //                /* global asm block */
-                    //                asm_global_instr();
-                    //                continue;
-                    //            }
-                    //            if (tok >= TOK_UIDENT) {
-                    //               /* special test for old K&R protos without explicit int
-                    //                  type. Only accepted when defining global data */
-                    //                btype.t = VT_INT;
-                    //            } else {
-                    //                if (tok != TOK_EOF)
-                    //                    expect("declaration");
-                    //                break;
-                    //            }
+                    if (prep.tok == (int)TPTOKEN.TOK_ASM1 || prep.tok == (int)TPTOKEN.TOK_ASM2 || prep.tok == (int)TPTOKEN.TOK_ASM3)
+                    {
+                        /* global asm block */
+                        //                asm_global_instr();
+                        continue;
+                    }
+
+                    if (prep.tok >= (int)TPTOKEN.TOK_UIDENT)
+                    {
+                        /* special test for old K&R protos without explicit int
+                           type. Only accepted when defining global data */
+                        btype.t = VT_INT;
+                    }
+                    else
+                    {
+                        if (prep.tok != (int)TPTOKEN.TOK_EOF)
+                            prep.expect("declaration");
+                        break;
+                    }
                 }
 
                 if (prep.tok == ';')
@@ -1363,6 +2985,17 @@ namespace TidePool
     {
         public int t;
         public Sym reff;
+    }
+
+    //-------------------------------------------------------------------------
+
+    public class SValue 	/* value on stack */
+    {
+        public CType type;    /* type */
+        public int r;         /* register + flags */
+        public int r2;        /* second register, used for 'long long' type. If not used, set to VT_CONST */
+        public CValue c;      /* constant, if VT_CONST */
+        public Sym sym;       /* symbol, if (VT_SYM | VT_CONST), or if result of unary() for an identifier. */
     }
 
     //-------------------------------------------------------------------------
