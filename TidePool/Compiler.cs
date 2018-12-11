@@ -26,6 +26,7 @@ namespace TidePool
     {
         public TidePool tp;
         public Preprocessor prep;
+        public Generator gen;
 
         public const int LONG_SIZE = 4;
 
@@ -39,8 +40,8 @@ namespace TidePool
         public const int FUNC_ELLIPSIS = 3;               /* ansi function prototype with ... */
 
         /* type_decl() types */
-        public const int TYPE_ABSTRACT = 1; /* type without variable */
-        public const int TYPE_DIRECT = 2; /* type with variable */
+        public const int TYPE_ABSTRACT = 1;         /* type without variable */
+        public const int TYPE_DIRECT = 2;           /* type with variable */
 
         public const int VT_VALMASK = 0x003f;       /* mask for value location, register or: */
         public const int VT_CONST = 0x0030;         /* constant in vc (must be first non register value) */
@@ -147,8 +148,6 @@ namespace TidePool
         public string funcname;
         public int g_debug;
 
-        //ST_DATA CType char_pointer_type, func_old_type, int_type, size_type;
-
         //#define NODATA_WANTED (nocode_wanted > 0) /* no static data output wanted either */
         //#define STATIC_DATA_WANTED (nocode_wanted & 0xC0000000) /* only static data output */
 
@@ -164,7 +163,13 @@ namespace TidePool
             vtop = 0;
         }
 
-        public void is_float() { }
+        public bool is_float(int t)
+        {
+            int bt;
+            bt = t & VT_BTYPE;
+            return (bt == VT_LDOUBLE || bt == VT_DOUBLE || bt == VT_FLOAT || bt == VT_QFLOAT);
+        }
+
         public void ieee_finite() { }
         public void test_lvalue() { }
         public void check_vstack() { }
@@ -174,9 +179,12 @@ namespace TidePool
         public void tp_debug_funcstart() { }
         public void tp_debug_funcend() { }
 
-        public void tp_compile()
+        public int tp_compile()
         {
+            //link our processes together
             prep = tp.prep;
+            gen = tp.gen;
+            gen.comp = this;
 
             Section.curTextSection = null;
             //funcname = "";
@@ -218,8 +226,7 @@ namespace TidePool
 
             /* end of translation unit info */
             //    tcc_debug_end(s1);
-            //    return 0;
-
+            return 0;
         }
 
         public void elfsym() { }
@@ -361,7 +368,7 @@ namespace TidePool
 
         public void sym_pop() { }
 
-        //---------------------------------------------------------------------
+        //- values ------------------------------------------------------------
 
         public void vsetc(CType type, int r, CValue vc)
         {
@@ -522,7 +529,55 @@ namespace TidePool
         public void save_regs() { }
         public void save_reg() { }
         public void save_reg_upstack() { }
-        public void get_reg() { }
+
+        /* find a free register of class 'rc'. If none, save one register */
+        public int get_reg(int rc)
+        {
+            int r;
+            int ppos;
+            SValue p;
+
+            /* find a free register */
+            for (r = 0; r < Generator.NB_REGS; r++)
+            {
+                if ((gen.reg_classes[r] & rc) != 0)
+                {
+                    if (nocode_wanted)
+                        return r;
+                    for (ppos = 0; ppos <= vtop; ppos++)
+                    {
+                        p = vstack[ppos];
+                        if (((p.r & VT_VALMASK) == r) || ((p.r2 & VT_VALMASK) == r))
+                            goto notfound;
+                    }
+                    return r;
+                }
+            notfound: ;
+            }
+
+            /* no register left : free the first one on the stack (VERY
+            IMPORTANT to start from the bottom to ensure that we don't
+            spill registers used in gen_opi()) */
+            //for (p = vstack; p <= vtop; p++)
+            //{
+            //    /* look at second register (if long long) */
+            //    r = p->r2 & VT_VALMASK;
+            //    if (r < VT_CONST && (reg_classes[r] & rc))
+            //        goto save_found;
+            //    r = p->r & VT_VALMASK;
+            //    if (r < VT_CONST && (reg_classes[r] & rc))
+            //    {
+            //    save_found:
+            //        save_reg(r);
+            //        return r;
+            //    }
+            //}
+
+            /* Should never comes here */
+            return -1;
+
+        }
+
         public void move_reg() { }
         public void gaddrof() { }
         public void gbound() { }
@@ -533,7 +588,165 @@ namespace TidePool
 
         public int gv(int rc)
         {
-            return 0;       //dummy
+            int r = 0;
+            int bit_pos;
+            int bit_size;
+            int size;
+            int align;
+            int rc2;
+
+            /* NOTE: get_reg can modify vstack[] */
+            if ((vstack[vtop].type.t & VT_BITFIELD) != 0)
+            {
+                //        CType type;
+
+                //        bit_pos = BIT_POS(vtop->type.t);
+                //        bit_size = BIT_SIZE(vtop->type.t);
+                //        /* remove bit field info to avoid loops */
+                //        vtop->type.t &= ~VT_STRUCT_MASK;
+
+                //        type.ref = NULL;
+                //        type.t = vtop->type.t & VT_UNSIGNED;
+                //        if ((vtop->type.t & VT_BTYPE) == VT_BOOL)
+                //            type.t |= VT_UNSIGNED;
+
+                //        r = adjust_bf(vtop, bit_pos, bit_size);
+
+                //        if ((vtop->type.t & VT_BTYPE) == VT_LLONG)
+                //            type.t |= VT_LLONG;
+                //        else
+                //            type.t |= VT_INT;
+
+                //        if (r == VT_STRUCT) {
+                //            load_packed_bf(&type, bit_pos, bit_size);
+                //        } else {
+                //            int bits = (type.t & VT_BTYPE) == VT_LLONG ? 64 : 32;
+                //            /* cast to int to propagate signedness in following ops */
+                //            gen_cast(&type);
+                //            /* generate shifts */
+                //            vpushi(bits - (bit_pos + bit_size));
+                //            gen_op(TOK_SHL);
+                //            vpushi(bits - bit_size);
+                //            /* NOTE: transformed to SHR if unsigned */
+                //            gen_op(TOK_SAR);
+                //        }
+                //        r = gv(rc);
+            }
+            else
+            {
+                //        if (is_float(vtop->type.t) && 
+                //            (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+                //                unsigned long offset;
+                //                /* CPUs usually cannot use float constants, so we store them
+                //                generically in data segment */
+                //                size = type_size(&vtop->type, &align);
+                //                if (NODATA_WANTED)
+                //                    size = 0, align = 1;
+                //                offset = section_add(data_section, size, align);
+                //                vpush_ref(&vtop->type, data_section, offset, size);
+                //                vswap();
+                //                init_putv(&vtop->type, data_section, offset);
+                //                vtop->r |= VT_LVAL;
+                //        }
+                //#ifdef CONFIG_TCC_BCHECK
+                //        if (vtop->r & VT_MUSTBOUND) 
+                //            gbound();
+                //#endif
+
+                r = vstack[vtop].r & VT_VALMASK;
+                rc2 = ((rc & Generator.RC_FLOAT) != 0) ? Generator.RC_FLOAT : Generator.RC_INT;
+                if (rc == Generator.RC_IRET)
+                    rc2 = Generator.RC_LRET;
+                /* need to reload if:
+                - constant
+                - lvalue (need to dereference pointer)
+                - already a register, but not in the right class */
+                if (r >= VT_CONST
+                    || ((vstack[vtop].r & VT_LVAL) != 0)
+                    || !((gen.reg_classes[r] & rc) != 0)
+                    || ((vstack[vtop].type.t & VT_BTYPE) == VT_LLONG && !((gen.reg_classes[vstack[vtop].r2] & rc2) != 0))
+                    )
+                {
+                    r = get_reg(rc);
+                    if ((vstack[vtop].type.t & VT_BTYPE) == VT_LLONG)
+                    {
+                        //                int addr_type = VT_INT, load_size = 4, load_type = VT_INT;
+                        //                unsigned long long ll;
+                        //                int r2, original_type;
+                        //                original_type = vtop->type.t;
+                        //                /* two register type load : expand to two words
+                        //                temporarily */
+                        //                if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
+                        //                    /* load constant */
+                        //                    ll = vtop->c.i;
+                        //                    vtop->c.i = ll; /* first word */
+                        //                    load(r, vtop);
+                        //                    vtop->r = r; /* save register value */
+                        //                    vpushi(ll >> 32); /* second word */
+                        //                } else
+                        //                    if (vtop->r & VT_LVAL) {
+                        //                        /* We do not want to modifier the long long
+                        //                        pointer here, so the safest (and less
+                        //                        efficient) is to save all the other registers
+                        //                        in the stack. XXX: totally inefficient. */
+                        /* lvalue_save: save only if used further down the stack */
+                        //                        save_reg_upstack(vtop->r, 1);
+                        /* load from memory */
+                        //                        vtop->type.t = load_type;
+                        //                        load(r, vtop);
+                        //                        vdup();
+                        //                        vtop[-1].r = r; /* save register value */
+                        /* increment pointer to get second word */
+                        //                        vtop->type.t = addr_type;
+                        //                        gaddrof();
+                        //                        vpushi(load_size);
+                        //                        gen_op('+');
+                        //                        vtop->r |= VT_LVAL;
+                        //                        vtop->type.t = load_type;
+                        //                    } else {
+                        //                        /* move registers */
+                        //                        load(r, vtop);
+                        //                        vdup();
+                        //                        vtop[-1].r = r; /* save register value */
+                        //                        vtop->r = vtop[-1].r2;
+                        //                    }
+                        /* Allocate second register. Here we rely on the fact that
+                        get_reg() tries first to free r2 of an SValue. */
+                        //                    r2 = get_reg(rc2);
+                        //                    load(r2, vtop);
+                        //                    vpop();
+                        /* write second register */
+                        //                    vtop->r2 = r2;
+                        //                    vtop->type.t = original_type;
+                    }
+                    else if (((vstack[vtop].r & VT_LVAL) != 0) && !is_float(vstack[vtop].type.t))
+                    {
+                        //                int t1, t;
+                        //                /* lvalue of scalar type : need to use lvalue type
+                        //                because of possible cast */
+                        //                t = vtop->type.t;
+                        //                t1 = t;
+                        //                /* compute memory access type */
+                        //                if (vtop->r & VT_LVAL_BYTE)
+                        //                    t = VT_BYTE;
+                        //                else if (vtop->r & VT_LVAL_SHORT)
+                        //                    t = VT_SHORT;
+                        //                if (vtop->r & VT_LVAL_UNSIGNED)
+                        //                    t |= VT_UNSIGNED;
+                        //                vtop->type.t = t;
+                        //                load(r, vtop);
+                        //                /* restore wanted type */
+                        //                vtop->type.t = t1;
+                    }
+                    else
+                    {
+                        /* one register type load */
+                        gen.load(r, vstack[vtop]);
+                    }
+                }
+                vstack[vtop].r = r;
+            }
+            return r;
         }
 
         public void gv2() { }
@@ -567,9 +780,11 @@ namespace TidePool
         public void mk_pointer() { }
         public void is_compatible_func() { }
 
+        //- type declaration --------------------------------------------------
+
         public bool compare_types(CType type1, CType type2, int unqualified)
         {
-            return true;
+            return true;        //dummy val
         }
 
         public bool is_compatible_types(CType type1, CType type2)
@@ -579,7 +794,11 @@ namespace TidePool
 
         public void is_compatible_unqualified_types() { }
         public void type_to_str() { }
-        public void gen_assign_cast() { }
+
+        public void gen_assign_cast(CType dt)
+        {
+        }
+
         public void vstore() { }
         public void inc() { }
         public void parse_mult_str() { }
@@ -1109,6 +1328,8 @@ namespace TidePool
 
         public void parse_type() { }
         public void parse_builtin_params() { }
+
+        //- expressions -------------------------------------------------------
 
         public void unary()
         {
@@ -2255,7 +2476,82 @@ namespace TidePool
         //- statements ----------------------------------------------------------------
 
         public void is_label() { }
-        public void gfunc_return() { }
+
+        public void gfunc_return(CType func_type)
+        {
+            if ((func_type.t & VT_BTYPE) == VT_STRUCT)
+            {
+                //    CType type, ret_type;
+                //    int ret_align, ret_nregs, regsize;
+                //    ret_nregs = gfunc_sret(func_type, func_var, &ret_type,
+                //        &ret_align, &regsize);
+                //    if (0 == ret_nregs)
+                //    {
+                //        /* if returning structure, must copy it to implicit
+                //        first pointer arg location */
+                //        type = *func_type;
+                //        mk_pointer(&type);
+                //        vset(&type, VT_LOCAL | VT_LVAL, func_vc);
+                //        indir();
+                //        vswap();
+                //        /* copy structure value to pointer */
+                //        vstore();
+                //    }
+                //    else
+                //    {
+                //        /* returning structure packed into registers */
+                //        int r, size, addr, align;
+                //        size = type_size(func_type, &align);
+                //        if ((vtop->r != (VT_LOCAL | VT_LVAL) ||
+                //            (vtop->c.i & (ret_align - 1)))
+                //            && (align & (ret_align - 1)))
+                //        {
+                //            loc = (loc - size) & -ret_align;
+                //            addr = loc;
+                //            type = *func_type;
+                //            vset(&type, VT_LOCAL | VT_LVAL, addr);
+                //            vswap();
+                //            vstore();
+                //            vpop();
+                //            vset(&ret_type, VT_LOCAL | VT_LVAL, addr);
+                //        }
+                //        vtop->type = ret_type;
+                //        if (is_float(ret_type.t))
+                //            r = rc_fret(ret_type.t);
+                //        else
+                //            r = RC_IRET;
+
+                //        if (ret_nregs == 1)
+                //            gv(r);
+                //        else
+                //        {
+                //            for (; ; )
+                //            {
+                //                vdup();
+                //                gv(r);
+                //                vpop();
+                //                if (--ret_nregs == 0)
+                //                    break;
+                //                /* We assume that when a structure is returned in multiple
+                //                registers, their classes are consecutive values of the
+                //                suite s(n) = 2^n */
+                //                r <<= 1;
+                //                vtop->c.i += regsize;
+                //            }
+                //        }
+                //    }
+            }
+            else if (is_float(func_type.t))
+            {
+                //    gv(rc_fret(func_type->t));
+            }
+            else
+            {
+                //gv(RC_IRET);
+            }
+            vtop--; /* NOT vpop() because on x86 it would flush the fp stack */
+        }
+
         public void case_cmp() { }
         public void gcase() { }
 
@@ -2400,11 +2696,11 @@ namespace TidePool
                 if (prep.tok != ';')
                 {
                     gexpr();
-                    //            gen_assign_cast(&func_vt);
-                    //            if ((func_vt.t & VT_BTYPE) == VT_VOID)
-                    //                vtop--;
-                    //            else
-                    //                gfunc_return(&func_vt);
+                    gen_assign_cast(func_vt);
+                    if ((func_vt.t & VT_BTYPE) == VT_VOID)
+                        vtop--;
+                    else
+                        gfunc_return(func_vt);
                 }
                 prep.skip(';');
                 /* jump unless last stmt in top-level block */
@@ -2663,6 +2959,8 @@ namespace TidePool
         public void decl_initializer() { }
         public void decl_initializer_alloc() { }
 
+        //- functions ---------------------------------------------------------
+
         public void gen_function(Sym sym)
         {
             nocode_wanted = false;
@@ -2683,7 +2981,7 @@ namespace TidePool
             /* push a dummy symbol to enable local sym storage */
             //    sym_push2(&local_stack, SYM_FIELD, 0, 0);
             //    local_scope = 1; /* for function parameters */
-            //    gfunc_prolog(&sym->type);
+            gen.gfunc_prolog(sym.type);
             //    local_scope = 0;
             //    rsym = 0;
             int bsym = 0;       //dummy init vals
@@ -2717,6 +3015,8 @@ namespace TidePool
         public void gen_inline_functions() { }
         public void free_inline_functions() { }
 
+        //- external declarations ---------------------------------------------
+
         public int decl0(int l, bool is_for_loop_init, Sym func_sym)
         {
             int v = 0;
@@ -2728,9 +3028,13 @@ namespace TidePool
             Sym sym = null;
             AttributeDef ad = new AttributeDef();
 
+            /*external-declaration:
+                function-definition
+                declaration
+             */
             while (true)
             {
-                if (!parse_btype(btype, ad))
+                if (!parse_btype(btype, ad))        //parse declaration-specifiers ("base type")
                 {
                     if (is_for_loop_init)
                         return 0;
@@ -2747,7 +3051,7 @@ namespace TidePool
                     if (prep.tok == (int)TPTOKEN.TOK_ASM1 || prep.tok == (int)TPTOKEN.TOK_ASM2 || prep.tok == (int)TPTOKEN.TOK_ASM3)
                     {
                         /* global asm block */
-                        //                asm_global_instr();
+                        //asm_global_instr();
                         continue;
                     }
 
@@ -2765,6 +3069,7 @@ namespace TidePool
                     }
                 }
 
+                //if we have a anon type 
                 if (prep.tok == ';')
                 {
                     //	    if ((btype.t & VT_BTYPE) == VT_STRUCT) {
@@ -2780,14 +3085,14 @@ namespace TidePool
                     //            }
                 }
 
+                //base type is followed by either a function def or a list of declarators
                 while (true)
                 { /* iterate thru each declaration */
                     type = btype;
                     /* If the base type itself was an array type of unspecified
                        size (like in 'typedef int arr[]; arr x = {1};') then
                        we will overwrite the unknown size by the real one for
-                       this decl.  We need to unshare the ref symbol holding
-                       that size.  */
+                       this decl.  We need to unshare the ref symbol holding that size.  */
                     //	    if ((type.t & VT_ARRAY) && type.ref->c < 0) {
                     //		type.ref = sym_push(SYM_FIELD, &type.ref->type, 0, type.ref->c);
                     //	    }
@@ -2826,6 +3131,7 @@ namespace TidePool
                     //            }
                     //#endif
 
+                    //parse func defintion
                     if (prep.tok == '{')
                     {
                         //                if (l != VT_CONST)
@@ -2958,13 +3264,14 @@ namespace TidePool
                         //                        decl_initializer_alloc(&type, &ad, r, has_init, v, l);
                         //                    }
                         //                }
-                        //                if (tok != ',') {
-                        //                    if (is_for_loop_init)
-                        //                        return 1;
-                        //                    skip(';');
-                        //                    break;
-                        //                }
-                        //                next();
+                        if (prep.tok != ',')
+                        {
+                            if (is_for_loop_init)
+                                return 1;
+                            prep.skip(';');
+                            break;
+                        }
+                        prep.next();
                     }
                     ad.a.aligned = 0;
                 }

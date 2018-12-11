@@ -30,6 +30,7 @@ namespace TidePool
 
         public Preprocessor prep;
         public Compiler comp;
+        public Generator gen;
 
         public List<FileSpec> files;
         public OUTPUTTYPE output_type;
@@ -248,6 +249,8 @@ namespace TidePool
             Section.initSection(this);
             prep = new Preprocessor(this);
             comp = new Compiler(this);
+            gen = new Generator(this);
+            
 
             files = new List<FileSpec>();
             infiles = new List<BufferedFile>();
