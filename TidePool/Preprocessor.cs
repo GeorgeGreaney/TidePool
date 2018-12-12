@@ -253,6 +253,7 @@ namespace TidePool
     {
 
         public TidePool tp;
+        public Compiler comp;
 
         public int tokenFlags;
         public int parseFlags;
@@ -1438,10 +1439,59 @@ namespace TidePool
 
         public void unget_tok() { }
 
+        //---------------------------------------------------------------------
+
         public void preprocess_start(bool isAsm)
         {
+            comp = tp.comp;
             curFile = tp.infiles[tp.infiles.Count - 1];
             total_lines = 0;
+
+            //clear stacks
+            //s1->include_stack_ptr = s1->include_stack;
+            //s1->ifdef_stack_ptr = s1->ifdef_stack;
+            //file->ifdef_stack_ptr = s1->ifdef_stack_ptr;
+
+            pp_expr = 0;
+            pp_counter = 0;
+            pp_debug_tok = pp_debug_symv = 0;
+
+            //pp_once++;
+            comp.pvtop = comp.vtop = 0;
+            //s1->pack_stack[0] = 0;
+            //s1->pack_stack_ptr = s1->pack_stack;
+
+            //set_idnum('$', s1->dollars_in_identifiers ? IS_ID : 0);
+            //set_idnum('.', is_asm ? IS_ID : 0);
+
+            //cstr_new(&cstr);
+            //cstr_cat(&cstr, "\"", -1);
+            //cstr_cat(&cstr, file->filename, -1);
+            //cstr_cat(&cstr, "\"", 0);
+            //tcc_define_symbol(s1, "__BASE_FILE__", cstr.data);
+
+            //cstr_reset(&cstr);
+            //for (i = 0; i < s1->nb_cmd_include_files; i++)
+            //{
+            //    cstr_cat(&cstr, "#include \"", -1);
+            //    cstr_cat(&cstr, s1->cmd_include_files[i], -1);
+            //    cstr_cat(&cstr, "\"\n", -1);
+            //}
+            
+            //if (cstr.size)
+            //{
+            //    *s1->include_stack_ptr++ = file;
+
+            //    //read source code from cmd line?
+            //    tcc_open_bf(s1, "<command line>", cstr.size);
+            //    memcpy(file->buffer, cstr.data, cstr.size);
+            //}
+            //cstr_free(&cstr);
+
+            //if (is_asm)
+            //    tcc_define_symbol(s1, "__ASSEMBLER__", NULL);
+
+            parseFlags = isAsm ? PARSE_FLAG_ASM_FILE : 0;
             tokenFlags = TOK_FLAG_BOL | TOK_FLAG_BOF;
         }
 

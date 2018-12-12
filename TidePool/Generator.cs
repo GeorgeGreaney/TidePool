@@ -69,7 +69,7 @@ namespace TidePool
         ///* #define FUNC_STRUCT_PARAM_AS_PTR */
 
         /* pointer size, in bytes */
-        //#define PTR_SIZE 4
+        public const int PTR_SIZE = 4;
 
         /* long double size and alignment, in bytes */
         //#define LDOUBLE_SIZE  12
@@ -98,22 +98,57 @@ namespace TidePool
 
             reg_classes = new int[NB_REGS] 
                 {
-    /* eax */ RC_INT | RC_EAX,
-    /* ecx */ RC_INT | RC_ECX,
-    /* edx */ RC_INT | RC_EDX,
-    /* ebx */ (RC_INT | RC_EBX) * USE_EBX,
-    /* st0 */ RC_FLOAT | RC_ST0,
-};
+                    /* eax */ RC_INT | RC_EAX,
+                    /* ecx */ RC_INT | RC_ECX,
+                    /* edx */ RC_INT | RC_EDX,
+                    /* ebx */ (RC_INT | RC_EBX) * USE_EBX,
+                    /* st0 */ RC_FLOAT | RC_ST0,
+                };
         }
 
-        public void g() { }
-        public void o() { }
+        public void g(byte c)
+        {
+            int ind1;
+            if (comp.nocode_wanted)
+                return;
+            ind1 = comp.ind + 1;
+            if (ind1 > Section.curTextSection.data_allocated)
+                Section.curTextSection.section_realloc(ind1);
+            Section.curTextSection.data[comp.ind] = c;
+            comp.ind = ind1;
+        }
+
+        public void o(uint c)
+        {
+            while (c != 0)
+            {
+                g((byte)c);
+                c = c >> 8;
+            }
+        }
+
         public void gen_le16() { }
-        public void gen_le32() { }
+
+        public void gen_le32(int c)
+        {
+            g((byte)c);
+            g((byte)(c >> 8));
+            g((byte)(c >> 16));
+            g((byte)(c >> 24));
+        }
+
         public void gsym_addr() { }
         public void gsym() { }
         public void oad() { }
-        public void gen_addr32() { }
+
+        public void gen_addr32(int r, Sym sym, int c)
+        {
+            if ((r & Compiler.VT_SYM) != 0)
+                greloc(Section.curTextSection, sym, comp.ind, R_386_32);
+            gen_le32(c);
+
+        }
+
         public void gen_addrpc32() { }
         public void gen_modrm() { }
 
@@ -170,8 +205,8 @@ namespace TidePool
                 } else {
                     if (v == Compiler.VT_CONST)
                     {
-            //            o(0xb8 + r); /* mov $xx, r */
-            //            gen_addr32(fr, sv->sym, fc);
+                        o((uint)(0xb8 + r));                    /* mov $xx, r */
+                        gen_addr32(fr, sv.sym, fc);
                     }
                     else if (v == Compiler.VT_LOCAL)
                     {
@@ -218,7 +253,7 @@ namespace TidePool
             int fastcall_nb_regs;
             int param_index;
             int param_addr;
-            //uint8_t *fastcall_regs_ptr;
+            int[] fastcall_regs_ptr;
             Sym sym;
             CType type;
 
@@ -235,25 +270,20 @@ namespace TidePool
             //        fastcall_nb_regs = 2;
             //        fastcall_regs_ptr = fastcallw_regs;
             //    } else {
-            //        fastcall_nb_regs = 0;
-            //        fastcall_regs_ptr = NULL;
+                    fastcall_nb_regs = 0;
+                    fastcall_regs_ptr = null;
             //    }
-            //    param_index = 0;
+                param_index = 0;
 
             //    ind += FUNC_PROLOG_SIZE;
             //    func_sub_sp_offset = ind;
 
-            /* if the function returns a structure, then add an
-//    implicit pointer parameter */
-            //    func_vt = sym->type;
+            /* if the function returns a structure, then add an implicit pointer parameter */
+                comp.func_vt = sym.type;
             //    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
-            //#ifdef TCC_TARGET_PE
             //    size = type_size(&func_vt,&align);
             //    if (((func_vt.t & VT_BTYPE) == VT_STRUCT)
             //        && (size > 8 || (size & (size - 1)))) {
-            //#else
-            //    if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
-            //#endif
             //        /* XXX: fastcall case ? */
             //        func_vc = addr;
             //        addr += 4;

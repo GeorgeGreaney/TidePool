@@ -135,12 +135,12 @@ namespace TidePool
         public int vtop;
         public int pvtop;
 
-        public bool const_wanted; /* true if constant wanted */
-        public bool nocode_wanted; /* true if no code generation wanted for an expression */
-        public bool global_expr;  /* true if compound literals must be allocated globally (used during initializers parsing */
+        public bool const_wanted;       /* true if constant wanted */
+        public bool nocode_wanted;      /* true if no code generation wanted for an expression */
+        public bool global_expr;        /* true if compound literals must be allocated globally (used during initializers parsing */
 
-        public CType func_vt; /* current function return type (used by return instruction) */
-        public bool func_var; /* true if current function is variadic */
+        public CType func_vt;           /* current function return type (used by return instruction) */
+        public bool func_var;           /* true if current function is variadic */
         public int func_vc;
         public int last_line_num;
         public int last_ind;
@@ -161,6 +161,7 @@ namespace TidePool
             local_stack = null;
             vstack = new SValue[VSTACK_SIZE];
             vtop = 0;
+            func_vt = new CType();
         }
 
         public bool is_float(int t)
@@ -374,7 +375,7 @@ namespace TidePool
         {
             int v;
 
-            if (vtop >= (VSTACK_SIZE - 1))
+            if (vtop >= (VSTACK_SIZE))
                 tp.tp_error("memory full (vstack)");
 
             /* cannot let cpu flags if other instruction are generated. Also
@@ -398,7 +399,6 @@ namespace TidePool
             }
 
             SValue sval = new SValue();
-            vtop++;
             sval.type = type;
             sval.r = r;
             sval.r2 = VT_CONST;
@@ -544,7 +544,7 @@ namespace TidePool
                 {
                     if (nocode_wanted)
                         return r;
-                    for (ppos = 0; ppos <= vtop; ppos++)
+                    for (ppos = 1; ppos <= vtop; ppos++)
                     {
                         p = vstack[ppos];
                         if (((p.r & VT_VALMASK) == r) || ((p.r2 & VT_VALMASK) == r))
@@ -2547,7 +2547,7 @@ namespace TidePool
             }
             else
             {
-                //gv(RC_IRET);
+                gv(Generator.RC_IRET);
             }
             vtop--; /* NOT vpop() because on x86 it would flush the fp stack */
         }
