@@ -281,8 +281,28 @@ namespace TidePool
         {
         }
 
-        public void greloca() { }
-        public void greloc() { }
+        public void greloca(Section s, Sym sym, int offset, I386RELOCS type, uint addend)
+        {
+            //int c = 0;
+
+            //if (nocode_wanted && s == cur_text_section)
+            //    return;
+
+            //if (sym)
+            //{
+            //    if (0 == sym->c)
+            //        put_extern_sym(sym, NULL, 0, 0);
+            //    c = sym->c;
+            //}
+
+            ///* now we can add ELF relocation info */
+            //put_elf_reloca(symtab_section, s, offset, type, c, addend);
+        }
+
+        public void greloc(Section s, Sym sym, int offset, I386RELOCS type)
+        {
+            greloca(s, sym, offset, type, 0);
+        }
 
         //- symbols -----------------------------------------------------------
 
@@ -1088,7 +1108,7 @@ namespace TidePool
         public int post_type(CType type, AttributeDef ad, int storage, int td)
         {
             int n;
-            int l = 0;
+            FuncAttr.FUNCTYPE l = FuncAttr.FUNCTYPE.FUNC_NONE;
             int t1;
             int arg_size;
             int align;
@@ -1105,7 +1125,7 @@ namespace TidePool
                 if ((td != 0) && !((td & TYPE_ABSTRACT) != 0))
                     return 0;
                 if (prep.tok == ')')
-                    l = 0;								//empty param list
+                    l = FuncAttr.FUNCTYPE.FUNC_NONE;								//empty param list
                 //else if (parse_btype(&pt, &ad1))
                 //  l = FUNC_NEW;
                 //else if (td)
@@ -1116,7 +1136,7 @@ namespace TidePool
                 first = null;
                 //plast = &first;
                 arg_size = 0;
-                if (l > 0)
+                if (l > FuncAttr.FUNCTYPE.FUNC_NONE)
                 {
                     for (; ; )
                     {
@@ -1153,7 +1173,7 @@ namespace TidePool
                 }
                 else
                     /* if no parameters, then old type prototype */
-                    l = FUNC_OLD;
+                    l = FuncAttr.FUNCTYPE.FUNC_OLD;
 
                 prep.skip(')');		//closing paren
 
@@ -3106,7 +3126,7 @@ namespace TidePool
                         //                }
                         /* if old style function prototype, we accept a declaration list */
                         sym = type.reff;
-                        if (sym.f.func_type == FUNC_OLD && l == VT_CONST)
+                        if (sym.f.func_type == FuncAttr.FUNCTYPE.FUNC_OLD && l == VT_CONST)
                             decl0(VT_CMP, false, sym);
                     }
 
@@ -3322,8 +3342,28 @@ namespace TidePool
 
     public class FuncAttr
     {
-        public int func_call; /* calling convention (0..5), see below */
-        public int func_type; /* FUNC_OLD/NEW/ELLIPSIS */
+        /* stored in 'Sym->f.func_type' field */
+        public enum FUNCTYPE
+        {
+            FUNC_NONE = 0,
+            FUNC_NEW = 1, /* ansi function prototype */
+            FUNC_OLD = 2, /* old function prototype */
+            FUNC_ELLIPSIS = 3 /* ansi function prototype with ... */
+        }
+
+        /* stored in 'Sym->f.func_call' field */
+        public enum FUNCCALL
+        {
+            FUNC_CDECL = 0, /* standard c call */
+            FUNC_STDCALL = 1, /* pascal c call */
+            FUNC_FASTCALL1 = 2, /* first param in %eax */
+            FUNC_FASTCALL2 = 3, /* first parameters in %eax, %edx */
+            FUNC_FASTCALL3 = 4, /* first parameter in %eax, %edx, %ecx */
+            FUNC_FASTCALLW = 5 /* first parameter in %ecx, %edx */
+        }
+
+        public FUNCCALL func_call; /* calling convention (0..5), see below */
+        public FUNCTYPE func_type; /* FUNC_OLD/NEW/ELLIPSIS */
         public int func_args; /* PE __stdcall args */
     }
 

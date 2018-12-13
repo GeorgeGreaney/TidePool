@@ -159,12 +159,30 @@ namespace TidePool
             }
         }
 
+        //options
+        public void no_flag() { }
+        public void set_flag() { }
+        public void strstart() { }
+        public void link_option() { }
+        public void skip_linker_arg() { }
+        public void copy_linker_arg() { }
+        public void tp_set_linker() { }
+        public void parse_option_D() { }
+        public void args_parser_add_file() { }
+        public void args_parser_make_argv() { }
+        public void args_parser_listfile() { }
+        public void tp_parse_args() { }
+        public void tp_set_options() { }
+        public void tp_print_stats() { }
+
         public static void args_parser_(string filename, FILETYPE ftype)
         {
             FileSpec fspec = new FileSpec(filename, ftype);
             tp.files.Add(fspec);
         }
     }
+
+    //-------------------------------------------------------------------------
 
     public class TPOption
     {
@@ -179,6 +197,8 @@ namespace TidePool
             flags = _flags;
         }
     }
+
+    //-------------------------------------------------------------------------
 
     public enum TPOPTIONS
     {
@@ -235,6 +255,7 @@ namespace TidePool
         TP_OPTION_impdef
     }
 
+    //-------------------------------------------------------------------------
 
     public enum OUTPUTTYPE
     {

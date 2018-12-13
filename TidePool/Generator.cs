@@ -84,8 +84,9 @@ namespace TidePool
 
         public int[] reg_classes;
 
-        //static unsigned long func_sub_sp_offset;
-        //static int func_ret_sub;
+        public int func_sub_sp_offset;
+        public int func_ret_sub;
+
         //#ifdef CONFIG_TCC_BCHECK
         //static addr_t func_bound_offset;
         //static unsigned long func_bound_ind;
@@ -144,7 +145,7 @@ namespace TidePool
         public void gen_addr32(int r, Sym sym, int c)
         {
             if ((r & Compiler.VT_SYM) != 0)
-                greloc(Section.curTextSection, sym, comp.ind, R_386_32);
+                comp.greloc(Section.curTextSection, sym, comp.ind, I386RELOCS.R_386_32);
             gen_le32(c);
 
         }
@@ -243,13 +244,15 @@ namespace TidePool
         public void gfunc_sret() { }
         public void gfunc_call() { }
 
+        public const int FUNC_PROLOG_SIZE = (10 + USE_EBX);
+
         /* generate function prolog of type 't' */
         public void gfunc_prolog(CType func_type)
         {
             int addr;
             int align;
             int size;
-            int func_call;
+            FuncAttr.FUNCCALL func_call;
             int fastcall_nb_regs;
             int param_index;
             int param_addr;
@@ -263,20 +266,20 @@ namespace TidePool
             comp.loc = 0;
             comp.func_vc = 0;
 
-            //    if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
+                //if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
             //        fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
             //        fastcall_regs_ptr = fastcall_regs;
-            //    } else if (func_call == FUNC_FASTCALLW) {
+                //} else if (func_call == FUNC_FASTCALLW) {
             //        fastcall_nb_regs = 2;
             //        fastcall_regs_ptr = fastcallw_regs;
-            //    } else {
+                //} else {
                     fastcall_nb_regs = 0;
                     fastcall_regs_ptr = null;
             //    }
                 param_index = 0;
 
-            //    ind += FUNC_PROLOG_SIZE;
-            //    func_sub_sp_offset = ind;
+                comp.ind += FUNC_PROLOG_SIZE;
+                func_sub_sp_offset = comp.ind;
 
             /* if the function returns a structure, then add an implicit pointer parameter */
                 comp.func_vt = sym.type;
