@@ -55,10 +55,11 @@ namespace TidePool
         public string rpath;			/* as specified on the command line (-Wl,-rpath=) */
         public int enable_new_dtags;	/* ditto, (-Wl,--enable-new-dtags) */
 
-        //    /* output type, see TCC_OUTPUT_XXX */
-        //    int output_type;
-        //    /* output format, see TCC_OUTPUT_FORMAT_xxx */
-        //    int output_format;
+        /* output type, see TCC_OUTPUT_XXX */
+        public OUTPUTTYPE output_type;  
+
+        /* output format, see TCC_OUTPUT_FORMAT_xxx */
+        public OUTPUTFORMAT output_format;
 
         /* C language options */
         public bool char_is_unsigned;
@@ -129,7 +130,7 @@ namespace TidePool
         //    void (*error_func)(void *opaque, const char *msg);
         //    int error_set_jmp_enabled;
         //    jmp_buf error_jmp_buf;
-        int nb_errors;
+        public int nb_errors;
 
         //    /* output file for preprocessing (-E) */
         //    FILE *ppfp;
@@ -168,9 +169,9 @@ namespace TidePool
         //    struct InlineFunc **inline_fns;
         //    int nb_inline_fns;
 
-        //    /* sections */
-        //    Section **sections;
-        //    int nb_sections; /* number of sections, including first dummy section */
+            /* sections */
+            public List<Section> sections;
+            public int nb_sections;            /* number of sections, including first dummy section */
 
         //    Section **priv_sections;
         //    int nb_priv_sections; /* number of private sections */
@@ -213,21 +214,20 @@ namespace TidePool
         //#endif
 
         /* used by main and tcc_parse_args only */
-            int nb_libraries;			/* number of libs thereof */
-            int option_r;				/* option -r */
-            int do_bench;				/* option -bench */
-            int gen_deps;				/* option -MD  */
-            string deps_outfile;			/* option -MF */
-            int option_pthread;			/* -pthread option */
+        public List<FileSpec> files;        /* files seen on command line */
+        int nb_files;				        /* number thereof */
+        int nb_libraries;			        /* number of libs thereof */
+        public FILETYPE filetype;
+        public FileStream outfile;
+        public string outFilename;          /* output filename */
+        int option_r;				        /* option -r */
+        int do_bench;				    /* option -bench */
+        int gen_deps;				    /* option -MD  */
+        string deps_outfile;			/* option -MF */
+        int option_pthread;			    /* -pthread option */
         //    int argc;
         //    char **argv;
 
-            public List<FileSpec> files;        /* files seen on command line */
-            int nb_files;				        /* number thereof */
-            public OUTPUTTYPE output_type;      /* output filename */
-            public string outFilename;
-            public FileStream outfile;
-            public FILETYPE filetype;
 
 
         public const int AFF_PRINT_ERROR = 0x10;        /* print error if file not found */
@@ -275,45 +275,45 @@ namespace TidePool
             int opt;
             int n = 0;
             int t = 0;
-//    unsigned start_time = 0;
-//    const char *first_file;
-//    int argc; char **argv;
-//    FILE *ppfp = stdout;
+            //    unsigned start_time = 0;
+            //    const char *first_file;
+            //    int argc; char **argv;
+            //    FILE *ppfp = stdout;
 
-//redo:
+            //redo:
             Options.parseOptions(this, args);         //parse options
 
 
-//    if ((n | t) == 0) 
-//    {
-//        if (opt == OPT_HELP)
-//            return printf(help), 1;
-//        if (opt == OPT_HELP2)
-//            return printf(help2), 1;
+            //    if ((n | t) == 0) 
+            //    {
+            //        if (opt == OPT_HELP)
+            //            return printf(help), 1;
+            //        if (opt == OPT_HELP2)
+            //            return printf(help2), 1;
 
-//                if (opt == OPT_M32 || opt == OPT_M64)
-//                    tcc_tool_cross(s, argv, opt); /* never returns */
+            //                if (opt == OPT_M32 || opt == OPT_M64)
+            //                    tcc_tool_cross(s, argv, opt); /* never returns */
 
-//        if (s->verbose)
-//            printf(version);
+            //        if (s->verbose)
+            //            printf(version);
 
-//                if (opt == OPT_AR)
-//                    return tcc_tool_ar(s, argc, argv);
-//        #ifdef TCC_TARGET_PE
-//                if (opt == OPT_IMPDEF)
-//                    return tcc_tool_impdef(s, argc, argv);
-//        #endif
+            //                if (opt == OPT_AR)
+            //                    return tcc_tool_ar(s, argc, argv);
+            //        #ifdef TCC_TARGET_PE
+            //                if (opt == OPT_IMPDEF)
+            //                    return tcc_tool_impdef(s, argc, argv);
+            //        #endif
 
-//        if (opt == OPT_V)
-//            return 0;
+            //        if (opt == OPT_V)
+            //            return 0;
 
-//        if (opt == OPT_PRINT_DIRS) {
-//            /* initialize search dirs */
-//            set_environment(s);
-//            tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
-//            print_search_dirs(s);
-//            return 0;
-//        }
+            //        if (opt == OPT_PRINT_DIRS) {
+            //            /* initialize search dirs */
+            //            set_environment(s);
+            //            tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
+            //            print_search_dirs(s);
+            //            return 0;
+            //        }
 
             if (files.Count == 0)
             {
@@ -332,95 +332,95 @@ namespace TidePool
                 }
             }
 
-//        } else if (s->output_type == TCC_OUTPUT_OBJ && !s->option_r) {
-//            if (s->nb_libraries)
-//                tcc_error("cannot specify libraries with -c");
-//            if (n > 1 && s->outfile)
-//                tcc_error("cannot specify output file with -c many files");
-//        } else {
-//            if (s->option_pthread)
-//                tcc_set_options(s, "-lpthread");
-//        }
+            //        } else if (s->output_type == TCC_OUTPUT_OBJ && !s->option_r) {
+            //            if (s->nb_libraries)
+            //                tcc_error("cannot specify libraries with -c");
+            //            if (n > 1 && s->outfile)
+            //                tcc_error("cannot specify output file with -c many files");
+            //        } else {
+            //            if (s->option_pthread)
+            //                tcc_set_options(s, "-lpthread");
+            //        }
 
-//        if (s->do_bench)
-//            start_time = getclock_ms();			//get start time
-//    }
+            //        if (s->do_bench)
+            //            start_time = getclock_ms();			//get start time
+            //    }
 
-//    set_environment(s);
-//    if (s->output_type == 0)
-//        s->output_type = TCC_OUTPUT_EXE;
-//    tcc_set_output_type(s, s->output_type);
-//    s->ppfp = ppfp;
+            //    set_environment(s);
+            //    if (s->output_type == 0)
+            //        s->output_type = TCC_OUTPUT_EXE;
+            //    tcc_set_output_type(s, s->output_type);
+            //    s->ppfp = ppfp;
 
-//    if ((s->output_type == TCC_OUTPUT_MEMORY
-//        || s->output_type == TCC_OUTPUT_PREPROCESS) && (s->dflag & 16))
-//        s->dflag |= t ? 32 : 0, s->run_test = ++t, n = s->nb_files;
+            //    if ((s->output_type == TCC_OUTPUT_MEMORY
+            //        || s->output_type == TCC_OUTPUT_PREPROCESS) && (s->dflag & 16))
+            //        s->dflag |= t ? 32 : 0, s->run_test = ++t, n = s->nb_files;
 
 
-    /* compile or add each files or library */
+            /* compile or add each files or library */
             foreach (FileSpec filespec in files)
             {
                 filetype = filespec.ftype;
 
 
-//        s->alacarte_link = f->alacarte;
+                //        s->alacarte_link = f->alacarte;
 
-//        if (f->type == AFF_TYPE_LIB) {
-//            if (tcc_add_library_err(s, f->name) < 0)
-//                ret = 1;
-//        } else {
+                //        if (f->type == AFF_TYPE_LIB) {
+                //            if (tcc_add_library_err(s, f->name) < 0)
+                //                ret = 1;
+                //        } else {
 
-            if (verbose == 1)
-            {
-                Console.Out.WriteLine("-> {0}\n", filespec.name);
-            }
+                if (verbose == 1)
+                {
+                    Console.Out.WriteLine("-> {0}\n", filespec.name);
+                }
 
-//            if (!first_file)
-//                first_file = f->name;
+                //            if (!first_file)
+                //                first_file = f->name;
 
-            if (tp_add_file(filespec.name) < 0)
-            {
-                ret = 1;
-            }
-//        }
-//        s->filetype = 0;
-//        s->alacarte_link = 1;
-//        if (--n == 0 || ret || (s->output_type == TCC_OUTPUT_OBJ && !s->option_r))
-//            break;
-    }
-
-//        if (s->run_test) {
-//            t = 0;
-//        } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
-//            ;
-//        } else if (0 == ret) {
-//            if (s->output_type == TCC_OUTPUT_MEMORY) {
-//    #ifdef TCC_IS_NATIVE
-//                ret = tcc_run(s, argc, argv);
-//    #endif
-//            } else {
-//                if (!s->outfile)
-//                    s->outfile = default_outputfile(s, first_file);
-            if (Section.tp_output_file(this, outFilename) != 0)
+                if (tp_add_file(filespec.name) < 0)
+                {
                     ret = 1;
-//                else if (s->gen_deps)
-//                    gen_makedeps(s, s->outfile, s->deps_outfile);
-//            }
-//        }
+                }
+                //        }
+                //        s->filetype = 0;
+                //        s->alacarte_link = 1;
+                //        if (--n == 0 || ret || (s->output_type == TCC_OUTPUT_OBJ && !s->option_r))
+                //            break;
+            }
 
-//    if (s->do_bench && (n | t | ret) == 0)
-//        tcc_print_stats(s, getclock_ms() - start_time);		//get end time, dump stats
-//    tcc_delete(s);
+            //        if (s->run_test) {
+            //            t = 0;
+            //        } else if (s->output_type == TCC_OUTPUT_PREPROCESS) {
+            //            ;
+            //        } else if (0 == ret) {
+            //            if (s->output_type == TCC_OUTPUT_MEMORY) {
+            //    #ifdef TCC_IS_NATIVE
+            //                ret = tcc_run(s, argc, argv);
+            //    #endif
+            //            } else {
+            //                if (!s->outfile)
+            //                    s->outfile = default_outputfile(s, first_file);
+            if (Section.tp_output_file(this, outFilename) != 0)
+                ret = 1;
+            //                else if (s->gen_deps)
+            //                    gen_makedeps(s, s->outfile, s->deps_outfile);
+            //            }
+            //        }
 
-//    if (ret == 0 && n)
-//        goto redo; /* compile more files with -c */
-//    if (t)
-//        goto redo; /* run more tests with -dt -run */
+            //    if (s->do_bench && (n | t | ret) == 0)
+            //        tcc_print_stats(s, getclock_ms() - start_time);		//get end time, dump stats
+            //    tcc_delete(s);
 
-//    if (ppfp && ppfp != stdout)
-//        fclose(ppfp);
+            //    if (ret == 0 && n)
+            //        goto redo; /* compile more files with -c */
+            //    if (t)
+            //        goto redo; /* run more tests with -dt -run */
 
-    return ret;
+            //    if (ppfp && ppfp != stdout)
+            //        fclose(ppfp);
+
+            return ret;
 
         }
 
@@ -440,13 +440,12 @@ namespace TidePool
         public void dynarray_add() { }
         public void dynarray_reset() { }
         public void tp_split_path() { }
+
+        //- messages ------------------------------------------------------------------
+
         public void strcat_vprintf() { }
         public void strcat_printf() { }
-
-        //- error handling ----------------------------------------------------
-
         public void error1() { }
-
         public void tp_set_error_func() { }
 
         public void tp_error_noabort(string msg, params string[] values)
@@ -527,6 +526,8 @@ namespace TidePool
         public void tp_cleanup() { }
         public void tp_new() { }
         public void tp_delete() { }
+
+        //- file mgmt -----------------------------------------------------------------
 
         public void tp_set_output_type() { }
         public void tp_add_include_path() { }
