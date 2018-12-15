@@ -92,7 +92,6 @@ namespace TidePool
         //static unsigned long func_bound_ind;
         //#endif
 
-
         public Generator(TidePool _tp)
         {
             tp = _tp;
@@ -106,6 +105,8 @@ namespace TidePool
                     /* st0 */ RC_FLOAT | RC_ST0,
                 };
         }
+
+        //- instruction bytes -------------------------------------------------
 
         public void g(byte c)
         {
@@ -153,6 +154,8 @@ namespace TidePool
         public void gen_addrpc32() { }
         public void gen_modrm() { }
 
+        //- data operations -----------------------------------------------
+
         public void load(int r, SValue sv)
         {
             int v;
@@ -164,76 +167,78 @@ namespace TidePool
             SValue v2;
             //    sv = pe_getimport(sv, &v2);
 
-                fr = sv.r;
-                ft = sv.type.t & ~Compiler.VT_DEFSIGN;
-                fc = (int)sv.c.i;
+            fr = sv.r;
+            ft = sv.type.t & ~Compiler.VT_DEFSIGN;
+            fc = (int)sv.c.i;
 
-                ft &= ~(Compiler.VT_VOLATILE | Compiler.VT_CONSTANT);
+            ft &= ~(Compiler.VT_VOLATILE | Compiler.VT_CONSTANT);
 
-                v = fr & Compiler.VT_VALMASK;
-                if ((fr & Compiler.VT_LVAL) != 0)
+            v = fr & Compiler.VT_VALMASK;
+            if ((fr & Compiler.VT_LVAL) != 0)
+            {
+                //        if (v == VT_LLOCAL) {
+                //            v1.type.t = VT_INT;
+                //            v1.r = VT_LOCAL | VT_LVAL;
+                //            v1.c.i = fc;
+                //            fr = r;
+                //            if (!(reg_classes[fr] & RC_INT))
+                //                fr = get_reg(RC_INT);
+                //            load(fr, &v1);
+                //        }
+                //        if ((ft & VT_BTYPE) == VT_FLOAT) {
+                //            o(0xd9); /* flds */
+                //            r = 0;
+                //        } else if ((ft & VT_BTYPE) == VT_DOUBLE) {
+                //            o(0xdd); /* fldl */
+                //            r = 0;
+                //        } else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
+                //            o(0xdb); /* fldt */
+                //            r = 5;
+                //        } else if ((ft & VT_TYPE) == VT_BYTE || (ft & VT_TYPE) == VT_BOOL) {
+                //            o(0xbe0f);   /* movsbl */
+                //        } else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED)) {
+                //            o(0xb60f);   /* movzbl */
+                //        } else if ((ft & VT_TYPE) == VT_SHORT) {
+                //            o(0xbf0f);   /* movswl */
+                //        } else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED)) {
+                //            o(0xb70f);   /* movzwl */
+                //        } else {
+                //            o(0x8b);     /* movl */
+                //        }
+                //        gen_modrm(r, fr, sv->sym, fc);
+            }
+            else
+            {
+                if (v == Compiler.VT_CONST)
                 {
-            //        if (v == VT_LLOCAL) {
-            //            v1.type.t = VT_INT;
-            //            v1.r = VT_LOCAL | VT_LVAL;
-            //            v1.c.i = fc;
-            //            fr = r;
-            //            if (!(reg_classes[fr] & RC_INT))
-            //                fr = get_reg(RC_INT);
-            //            load(fr, &v1);
-            //        }
-            //        if ((ft & VT_BTYPE) == VT_FLOAT) {
-            //            o(0xd9); /* flds */
-            //            r = 0;
-            //        } else if ((ft & VT_BTYPE) == VT_DOUBLE) {
-            //            o(0xdd); /* fldl */
-            //            r = 0;
-            //        } else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
-            //            o(0xdb); /* fldt */
-            //            r = 5;
-            //        } else if ((ft & VT_TYPE) == VT_BYTE || (ft & VT_TYPE) == VT_BOOL) {
-            //            o(0xbe0f);   /* movsbl */
-            //        } else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED)) {
-            //            o(0xb60f);   /* movzbl */
-            //        } else if ((ft & VT_TYPE) == VT_SHORT) {
-            //            o(0xbf0f);   /* movswl */
-            //        } else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED)) {
-            //            o(0xb70f);   /* movzwl */
-            //        } else {
-            //            o(0x8b);     /* movl */
-            //        }
-            //        gen_modrm(r, fr, sv->sym, fc);
-                } else {
-                    if (v == Compiler.VT_CONST)
-                    {
-                        o((uint)(0xb8 + r));                    /* mov $xx, r */
-                        gen_addr32(fr, sv.sym, fc);
-                    }
-                    else if (v == Compiler.VT_LOCAL)
-                    {
-            //            if (fc) {
-            //                o(0x8d); /* lea xxx(%ebp), r */
-            //                gen_modrm(r, VT_LOCAL, sv->sym, fc);
-            //            } else {
-            //                o(0x89);
-            //                o(0xe8 + r); /* mov %ebp, r */
-            //            }
-            //        } else if (v == VT_CMP) {
-            //            oad(0xb8 + r, 0); /* mov $0, r */
-            //            o(0x0f); /* setxx %br */
-            //            o(fc);
-            //            o(0xc0 + r);
-            //        } else if (v == VT_JMP || v == VT_JMPI) {
-            //            t = v & 1;
-            //            oad(0xb8 + r, t); /* mov $1, r */
-            //            o(0x05eb); /* jmp after */
-            //            gsym(fc);
-            //            oad(0xb8 + r, t ^ 1); /* mov $0, r */
-            //        } else if (v != r) {
-            //            o(0x89);
-            //            o(0xc0 + r + v * 8); /* mov v, r */
-                    }
+                    o((uint)(0xb8 + r));                    /* mov $xx, r */
+                    gen_addr32(fr, sv.sym, fc);
                 }
+                else if (v == Compiler.VT_LOCAL)
+                {
+                    //            if (fc) {
+                    //                o(0x8d); /* lea xxx(%ebp), r */
+                    //                gen_modrm(r, VT_LOCAL, sv->sym, fc);
+                    //            } else {
+                    //                o(0x89);
+                    //                o(0xe8 + r); /* mov %ebp, r */
+                    //            }
+                    //        } else if (v == VT_CMP) {
+                    //            oad(0xb8 + r, 0); /* mov $0, r */
+                    //            o(0x0f); /* setxx %br */
+                    //            o(fc);
+                    //            o(0xc0 + r);
+                    //        } else if (v == VT_JMP || v == VT_JMPI) {
+                    //            t = v & 1;
+                    //            oad(0xb8 + r, t); /* mov $1, r */
+                    //            o(0x05eb); /* jmp after */
+                    //            gsym(fc);
+                    //            oad(0xb8 + r, t ^ 1); /* mov $0, r */
+                    //        } else if (v != r) {
+                    //            o(0x89);
+                    //            o(0xc0 + r + v * 8); /* mov v, r */
+                }
+            }
 
         }
 
@@ -266,23 +271,23 @@ namespace TidePool
             comp.loc = 0;
             comp.func_vc = 0;
 
-                //if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
+            //if (func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) {
             //        fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
             //        fastcall_regs_ptr = fastcall_regs;
-                //} else if (func_call == FUNC_FASTCALLW) {
+            //} else if (func_call == FUNC_FASTCALLW) {
             //        fastcall_nb_regs = 2;
             //        fastcall_regs_ptr = fastcallw_regs;
-                //} else {
-                    fastcall_nb_regs = 0;
-                    fastcall_regs_ptr = null;
+            //} else {
+            fastcall_nb_regs = 0;
+            fastcall_regs_ptr = null;
             //    }
-                param_index = 0;
+            param_index = 0;
 
-                comp.ind += FUNC_PROLOG_SIZE;
-                func_sub_sp_offset = comp.ind;
+            comp.ind += FUNC_PROLOG_SIZE;
+            func_sub_sp_offset = comp.ind;
 
             /* if the function returns a structure, then add an implicit pointer parameter */
-                comp.func_vt = sym.type;
+            comp.func_vt = sym.type;
             //    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
             //    size = type_size(&func_vt,&align);
             //    if (((func_vt.t & VT_BTYPE) == VT_STRUCT)
@@ -339,9 +344,11 @@ namespace TidePool
             //#endif
         }
 
+        /* generate function epilog */
         public void gfunc_epilog()
         {
-            //addr_t v, saved_ind;
+            int v;
+            int saved_ind;
 
             //#ifdef CONFIG_TCC_BCHECK
             //    if (tcc_state->do_bounds_check
@@ -374,24 +381,28 @@ namespace TidePool
             //    }
             //#endif
 
-            //    /* align local size to word & save local variables */
-            //    v = (-loc + 3) & -4;
+            /* align local size to word & save local variables */
+            v = (-comp.loc + 3) & -4;
 
             //#if USE_EBX
             //    o(0x8b);
             //    gen_modrm(TREG_EBX, VT_LOCAL, NULL, -(v+4));
             //#endif
 
-            //    o(0xc9); /* leave */
-            //    if (func_ret_sub == 0) {
-            //        o(0xc3); /* ret */
-            //    } else {
-            //        o(0xc2); /* ret n */
-            //        g(func_ret_sub);
-            //        g(func_ret_sub >> 8);
-            //    }
-            //    saved_ind = ind;
-            //    ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
+            o(0xc9); /* leave */
+            if (func_ret_sub == 0)
+            {
+                o(0xc3); /* ret */
+            }
+            else
+            {
+                //        o(0xc2); /* ret n */
+                //        g(func_ret_sub);
+                //        g(func_ret_sub >> 8);
+            }
+
+            saved_ind = comp.ind;
+            comp.ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
             //#ifdef TCC_TARGET_PE
             //    if (v >= 4096) {
             //        oad(0xb8, v); /* mov stacksize, %eax */
@@ -399,24 +410,35 @@ namespace TidePool
             //    } else
             //#endif
             //    {
-            //        o(0xe58955);  /* push %ebp, mov %esp, %ebp */
-            //        o(0xec81);  /* sub esp, stacksize */
-            //        gen_le32(v);
-            //#ifdef TCC_TARGET_PE
-            //        o(0x90);  /* adjust to FUNC_PROLOG_SIZE */
-            //#endif
+            o(0xe58955);  /* push %ebp, mov %esp, %ebp */
+            o(0xec81);  /* sub esp, stacksize */
+            gen_le32(v);
+            o(0x90);  /* adjust to FUNC_PROLOG_SIZE */
             //    }
             //    o(0x53 * USE_EBX); /* push ebx */
-            //    ind = saved_ind;
-
+            comp.ind = saved_ind;
         }
 
         public void gjmp() { }
+
+        /* generate a jump to a fixed address */
         public void gjmp_addr() { }
+
         public void gtst_addr() { }
+
+        /* generate a test. set 'inv' to invert test. Stack entry is popped */
         public void gtst() { }
+
+        //- math operations -----------------------------------------------
+
+        /* generate an integer binary operation */
         public void gen_opi() { }
+
+        /* generate a floating point operation 'v = t1 op t2' instruction. The
+            two operands are guaranteed to have the same floating point type */
+        /* XXX: need to use ST1 too */
         public void gen_opf() { }
+
         public void gen_cvt_itof() { }
         public void gen_cvt_ftoi() { }
         public void gen_cvt_ftof() { }
