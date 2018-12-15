@@ -30,32 +30,61 @@ namespace TidePool
         public byte[] data;                 /* section data */
         public int data_allocated;          /* used for realloc() handling */
 
-        public int sh_name;                /* elf section name (only used during output) */
-        public int sh_num;                 /* elf section number */
-        public SECTIONTYPE sh_type;        /* elf section type */
-        public SECTIONFLAGS sh_flags;      /* elf section flags */
-        public int sh_info;                /* elf section info */
-        public int sh_addralign;           /* elf section alignment */
-        public int sh_entsize;             /* elf entry size */
-        public ulong sh_size;              /* section size (only used during output) */
-        public ulong sh_addr;              /* address at which the section is relocated */
-        public ulong sh_offset;            /* file offset */
+        public int sh_name;                 /* elf section name (only used during output) */
+        public int sh_num;                  /* elf section number */
+        public SECTIONTYPE sh_type;         /* elf section type */
+        public SECTIONFLAGS sh_flags;       /* elf section flags */
+        public int sh_info;                 /* elf section info */
+        public int sh_addralign;            /* elf section alignment */
+        public int sh_entsize;              /* elf entry size */
+        public int sh_size;                 /* section size (only used during output) */
+        public uint sh_addr;                 /* address at which the section is relocated */
+        public int sh_offset;               /* file offset */
 
-        public int nb_hashed_syms;         /* used to resize the hash table */
+        public int nb_hashed_syms;          /* used to resize the hash table */
 
-        public Section link;               /* link to another section */
-        public Section reloc;              /* corresponding section for relocation, if any */
-        public Section hash;               /* hash table for symbols */
-        public Section prev;               /* previous section on section stack */
+        public Section link;                /* link to another section */
+        public Section reloc;               /* corresponding section for relocation, if any */
+        public Section hash;                /* hash table for symbols */
+        public Section prev;                /* previous section on section stack */
 
-        public string name;                /* section name */
+        public string name;                 /* section name */
 
         //from tcc.h
+
+        //#define ARMAG  "!<arch>\012"    /* For COFF and a.out archives */
+
+        //typedef struct {
+        //    unsigned int n_strx;         /* index into string table of name */
+        //    unsigned char n_type;         /* type of symbol */
+        //    unsigned char n_other;        /* misc info (usually empty) */
+        //    unsigned short n_desc;        /* description field */
+        //    unsigned int n_value;        /* value of symbol */
+        //} Stab_Sym;
+
         public static Section textSection;
         public static Section dataSection;
         public static Section bssSection;             /* predefined sections */
         public static Section commonSection;
         public static Section curTextSection;        /* current section where function code is generated */
+
+        //#ifdef CONFIG_TCC_ASM
+        //ST_DATA Section *last_text_section; /* to handle .previous asm directive */
+        //#endif
+
+        //#ifdef CONFIG_TCC_BCHECK
+        ///* bound check related sections */
+        //ST_DATA Section *bounds_section; /* contains global data bound description */
+        //ST_DATA Section *lbounds_section; /* contains local data bound description */
+        //ST_FUNC void tccelf_bounds_new(TCCState *s);
+        //#endif
+
+        /* symbol sections */
+        public static Section symtab_section;
+
+        /* debug sections */
+        public static Section stab_section;
+        public static Section stabstr_section;
 
         //new_section
         public Section(TidePool tp, string _name, SECTIONTYPE _sh_type, SECTIONFLAGS _sh_flags)
@@ -85,16 +114,17 @@ namespace TidePool
                     break;
             }
 
-            //if (sh_flags & SHF_PRIVATE)
-            //{
-            //    dynarray_add(&s1->priv_sections, &s1->nb_priv_sections, sec);
-            //}
-            //else
-            //{
-            //    sec->sh_num = s1->nb_sections;
-            //    dynarray_add(&s1->sections, &s1->nb_sections, sec);
-            //}
-
+            if ((sh_flags & SECTIONFLAGS.SHF_PRIVATE) != 0)
+            {
+                tp.priv_sections.Add(this);
+                tp.nb_priv_sections++;
+            }
+            else
+            {
+                sh_num = tp.nb_sections;
+                tp.sections.Add(this);
+                tp.nb_sections++;
+            }
         }
 
         //tccelf_new
@@ -108,13 +138,11 @@ namespace TidePool
             dataSection = new Section(tp, ".data", SECTIONTYPE.SHT_PROGBITS, SECTIONFLAGS.SHF_ALLOC | SECTIONFLAGS.SHF_WRITE);
             bssSection = new Section(tp, ".bss", SECTIONTYPE.SHT_NOBITS, SECTIONFLAGS.SHF_ALLOC | SECTIONFLAGS.SHF_WRITE);
             commonSection = new Section(tp, ".common", SECTIONTYPE.SHT_NOBITS, SECTIONFLAGS.SHF_PRIVATE);
-            //    common_section->sh_num = SHN_COMMON;
+            commonSection.sh_num = (int)SECTIONIDX.SHN_COMMON;
 
             /* symbols are always generated for linking stage */
-            //    symtab_section = new_symtab(s, ".symtab", SHT_SYMTAB, 0,
-            //                                ".strtab",
-            //                                ".hashtab", SHF_PRIVATE);
-            //    s->symtab = symtab_section;
+            symtab_section = new_symtab(tp, ".symtab", SECTIONTYPE.SHT_SYMTAB, 0, ".strtab", ".hashtab", SECTIONFLAGS.SHF_PRIVATE);
+            tp.symtab = symtab_section;
 
             /* private symbol table for dynamic symbols */
             //    s->dynsymtab_section = new_symtab(s, ".dynsymtab", SHT_SYMTAB, SHF_PRIVATE|SHF_DYNSYM,
@@ -129,7 +157,37 @@ namespace TidePool
         public void tccelf_delete() { }
         public void tccelf_begin_file() { }
         public void tccelf_end_file() { }
-        public void new_symtab() { }
+
+        public static Section new_symtab(TidePool tp, string symtab_name, SECTIONTYPE sh_type, SECTIONFLAGS sh_flags,
+                            string strtab_name, string hash_name, SECTIONFLAGS hash_sh_flags)
+        {
+            Section symtab;
+            Section strtab;
+            Section hash;
+            int ptr;
+            int nb_buckets;
+
+            symtab = new Section(tp, symtab_name, sh_type, sh_flags);
+            //symtab->sh_entsize = sizeof(ElfW(Sym));
+            //strtab = new_section(s1, strtab_name, SHT_STRTAB, sh_flags);
+            //put_elf_str(strtab, "");
+            //symtab->link = strtab;
+            //put_elf_sym(symtab, 0, 0, 0, 0, 0, NULL);
+
+            //nb_buckets = 1;
+
+            //hash = new_section(s1, hash_name, SHT_HASH, hash_sh_flags);
+            //hash->sh_entsize = sizeof(int);
+            //symtab->hash = hash;
+            //hash->link = symtab;
+
+            //ptr = section_ptr_add(hash, (2 + nb_buckets + 1) * sizeof(int));
+            //ptr[0] = nb_buckets;
+            //ptr[1] = 1;
+            //memset(ptr + 2, 0, (nb_buckets + 1) * sizeof(int));
+            return symtab;
+
+        }
 
         public void section_realloc(int new_size)
         {
@@ -173,9 +231,9 @@ namespace TidePool
 
         public int put_elf_str(string sym)
         {
-            int len = sym.Length + 1;
+            int len = sym.Length;
             int offset = data_offset;
-            int ptr = section_ptr_add(len);
+            int ptr = section_ptr_add(len + 1);     //include space for the ending 0
             for (int i = 0; i < len; i++)
             {
                 data[ptr + i] = (byte)sym[i];
@@ -188,7 +246,23 @@ namespace TidePool
         public void rebuild_hash() { }
         public void put_elf_sym() { }
         public void find_elf_sym() { }
-        public void get_elf_sym_addr() { }
+
+        /* return elf symbol value, signal error if 'err' is nonzero */
+        public static uint get_elf_sym_addr(TidePool tp, string name, int err)
+        {
+            int sym_index;
+            //ElfW(Sym) *sym;
+
+            //sym_index = find_elf_sym(s->symtab, name);
+            //sym = &((ElfW(Sym) *)s->symtab->data)[sym_index];
+            //if (!sym_index || sym->st_shndx == SHN_UNDEF) {
+            //    if (err)
+            //        tcc_error("%s not defined", name);
+            return 0;
+            //}
+            //return sym->st_value;
+        }
+
         public void tcc_get_symbol() { }
         public void tcc_get_symbol_err() { }
         public void set_elf_sym() { }
@@ -200,7 +274,73 @@ namespace TidePool
         public void put_stabn() { }
         public void put_stabd() { }
         public void get_sym_attr() { }
-        public void sort_syms() { }
+
+        /* In an ELF file symbol table, the local symbols must appear below
+the global and weak ones. Since TCC cannot sort it while generating
+the code, we must do it after. All the relocation tables are also
+modified to take into account the symbol table sorting */
+        public static void sort_syms(TidePool tp, Section s)
+        {
+            int old_to_new_syms;
+            //ElfW(Sym) *new_syms;
+            int nb_syms;
+                int i;
+            //ElfW(Sym) *p, *q;
+            //ElfW_Rel *rel;
+            Section sr;
+            int type; 
+                int sym_index;
+
+            //nb_syms = s->data_offset / sizeof(ElfW(Sym));
+            //new_syms = tcc_malloc(nb_syms * sizeof(ElfW(Sym)));
+            //old_to_new_syms = tcc_malloc(nb_syms * sizeof(int));
+
+            /* first pass for local symbols */
+            //p = (ElfW(Sym) *)s->data;
+            //q = new_syms;
+            //for(i = 0; i < nb_syms; i++) {
+            //    if (ELFW(ST_BIND)(p->st_info) == STB_LOCAL) {
+            //        old_to_new_syms[i] = q - new_syms;
+            //        *q++ = *p;
+            //    }
+            //    p++;
+            //}
+
+            /* save the number of local symbols in section header */
+            //if( s->sh_size )    /* this 'if' makes IDA happy */
+            //    s->sh_info = q - new_syms;
+
+            /* then second pass for non local symbols */
+            //p = (ElfW(Sym) *)s->data;
+            //for(i = 0; i < nb_syms; i++) {
+            //    if (ELFW(ST_BIND)(p->st_info) != STB_LOCAL) {
+            //        old_to_new_syms[i] = q - new_syms;
+            //        *q++ = *p;
+            //    }
+            //    p++;
+            //}
+
+            /* we copy the new symbols to the old */
+            //memcpy(s->data, new_syms, nb_syms * sizeof(ElfW(Sym)));
+            //tcc_free(new_syms);
+
+            /* now we modify all the relocations */
+            //for(i = 1; i < s1->nb_sections; i++) {
+            //    sr = s1->sections[i];
+            //    if (sr->sh_type == SHT_RELX && sr->link == s) {
+            //        for_each_elem(sr, 0, rel, ElfW_Rel) {
+            //            sym_index = ELFW(R_SYM)(rel->r_info);
+            //            type = ELFW(R_TYPE)(rel->r_info);
+            //            sym_index = old_to_new_syms[sym_index];
+            //            rel->r_info = ELFW(R_INFO)(sym_index, type);
+            //        }
+            //    }
+            //}
+
+            //tcc_free(old_to_new_syms);
+
+        }
+
         public void relocate_syms() { }
         public void relocate_section() { }
         public void relocate_rel() { }
@@ -254,10 +394,10 @@ namespace TidePool
         public void final_sections_reloc() { }
 
         /* Create an ELF file on disk. This function handles ELF specific layout requirements */
-        public static void tcc_output_elf(TidePool tp, FileStream f, int phnum, Elf32_Phdr phdr, int file_offset, int[] sec_order)
+        public static void tcc_output_elf(TidePool tp, FileStream f, int phnum, Elf32_Phdr[] phdr, int file_offset, int[] sec_order)
         {
             int i;
-            int shnum;
+            ushort shnum;
             int offset;
             int size;
             OUTPUTTYPE file_type;
@@ -267,65 +407,67 @@ namespace TidePool
             Elf32_Shdr sh;
 
             file_type = tp.output_type;
-            shnum = tp.nb_sections;
+            shnum = (ushort)tp.nb_sections;
 
+            //build obj header
             if (phnum > 0)
             {
                 ehdr.e_phentsize = Elf32_Phdr.PHDRSIZE;
-                ehdr.e_phnum = phnum;
+                ehdr.e_phnum = (ushort)phnum;
                 ehdr.e_phoff = Elf32_Ehdr.EHDRSIZE;
             }
 
             /* align to 4 */
             file_offset = (file_offset + 3) & -4;
 
-            //#if !defined(TCC_TARGET_PE) && (defined(__FreeBSD__) || defined(__FreeBSD_kernel__))
-            //    /* FIXME: should set only for freebsd _target_, but we exclude only PE target */
-            //    ehdr.e_ident[EI_OSABI] = ELFOSABI_FREEBSD;
-            //#endif
+            switch (file_type)
+            {
+                default:
+                case OUTPUTTYPE.TP_OUTPUT_EXE:
+                    ehdr.e_type = ETYPE.ET_EXEC;
+                    ehdr.e_entry = get_elf_sym_addr(tp, "_start", 1);
+                    break;
+                case OUTPUTTYPE.TP_OUTPUT_DLL:
+                    ehdr.e_type = ETYPE.ET_DYN;
+                    ehdr.e_entry = textSection.sh_addr; /* XXX: is it correct ? */
+                    break;
+                case OUTPUTTYPE.TP_OUTPUT_OBJ:
+                    ehdr.e_type = ETYPE.ET_REL;
+                    ehdr.e_entry = 0;
+                    break;
+            }
 
-                switch(file_type) {
-            //    default:
-            //    case TCC_OUTPUT_EXE:
-            //        ehdr.e_type = ET_EXEC;
-            //        ehdr.e_entry = get_elf_sym_addr(s1, "_start", 1);
-            //        break;
-            //    case TCC_OUTPUT_DLL:
-            //        ehdr.e_type = ET_DYN;
-            //        ehdr.e_entry = text_section->sh_addr; /* XXX: is it correct ? */
-            //        break;
-            //    case TCC_OUTPUT_OBJ:
-            //        ehdr.e_type = ET_REL;
-            //        break;
-                }
+            ehdr.e_machine = EMACHINE.EM_386;
+            ehdr.e_version = EVERSION.EV_CURRENT;
+            ehdr.e_shoff = (ushort)file_offset;
+            ehdr.e_ehsize = Elf32_Ehdr.EHDRSIZE;
+            ehdr.e_shentsize = Elf32_Shdr.SHDRSIZE;
+            ehdr.e_shnum = shnum;
+            ehdr.e_shstrndx = (ushort)(shnum - 1);
 
-                ehdr.e_machine = EM_TCC_TARGET;
-                ehdr.e_version = EV_CURRENT;
-                ehdr.e_shoff = file_offset;
-                ehdr.e_ehsize = sizeof(ElfW(Ehdr));
-                ehdr.e_shentsize = sizeof(ElfW(Shdr));
-                ehdr.e_shnum = shnum;
-                ehdr.e_shstrndx = shnum - 1;
-
-            //    fwrite(&ehdr, 1, sizeof(ElfW(Ehdr)), f);
-            //    fwrite(phdr, 1, phnum * sizeof(ElfW(Phdr)), f);
-            //    offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
+            ehdr.writeOut(f);
+            for (i = 0; i < phnum; i++)
+            {
+                phdr[i].writeOut(f);
+            }
+            offset = Elf32_Ehdr.EHDRSIZE + (phnum * Elf32_Phdr.PHDRSIZE);
 
             //write section data
-            //    sort_syms(s1, symtab_section);
-            //    for(i = 1; i < s1->nb_sections; i++) {
-            //        s = s1->sections[sec_order[i]];
-            //        if (s->sh_type != SHT_NOBITS) {
-            //            while (offset < s->sh_offset) {
-            //                fputc(0, f);
-            //                offset++;
-            //            }
-            //            size = s->sh_size;
-            //            if (size)
-            //                fwrite(s->data, 1, size, f);
-            //            offset += size;
-            //        }
-            //    }
+            sort_syms(tp, symtab_section);
+            for (i = 1; i < tp.nb_sections; i++)
+            {
+                //        s = s1->sections[sec_order[i]];
+                //        if (s->sh_type != SHT_NOBITS) {
+                //            while (offset < s->sh_offset) {
+                //                fputc(0, f);
+                //                offset++;
+                //            }
+                //            size = s->sh_size;
+                //            if (size)
+                //                fwrite(s->data, 1, size, f);
+                //            offset += size;
+                //        }
+            }
 
             /* output section headers */
             //    while (offset < ehdr.e_shoff) {
@@ -356,7 +498,7 @@ namespace TidePool
         }
 
         /* Write an elf, coff or "binary" file */
-        public static int tcc_write_elf_file(TidePool tp, string filename, int phnum, Elf32_Phdr phdr, int file_offset, int[] sec_order)
+        public static int tcc_write_elf_file(TidePool tp, string filename, int phnum, Elf32_Phdr[] phdr, int file_offset, int[] sec_order)
         {
             OUTPUTTYPE file_type;
             FileStream f = null;
@@ -390,8 +532,12 @@ namespace TidePool
             return 0;
         }
 
-        public void tidy_section_headers() { }
+        public void tidy_section_headers()
+        {
+        }
 
+        /* Output an elf, coff or binary file */
+        /* XXX: suppress unneeded sections */
         public static int elf_output_file(TidePool tp, string filename)
         {
             int i;
@@ -403,7 +549,7 @@ namespace TidePool
             int[] sec_order;
 
             //    struct dyn_inf dyninf = {0};
-            Elf32_Phdr phdr;
+            Elf32_Phdr[] phdr;
             Elf32_Sym sym = null;
 
             Section strsec;
@@ -458,7 +604,7 @@ namespace TidePool
                 //            if (file_type == TCC_OUTPUT_EXE) {
                 //                bind_exe_dynsyms(s1);
                 //                if (s1->nb_errors)
-                //                    goto the_end;
+                //                    return ret;
                 //                bind_libs_dynsyms(s1);
                 //            } else {
                 //                /* shared library case: simply export all global symbols */
@@ -520,14 +666,14 @@ namespace TidePool
                 phnum = 5;
 
             /* allocate program segment headers */
-            //    phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
+            phdr = new Elf32_Phdr[phnum];
 
             /* compute number of sections */
             shnum = tp.nb_sections;
 
             /* this array is used to reorder sections in the output file */
-            //    sec_order = tcc_malloc(sizeof(int) * shnum);
-            //    sec_order[0] = 0;
+            sec_order = new int[shnum];
+            sec_order[0] = 0;
 
             /* compute section to program header mapping */
             //    file_offset = layout_sections(s1, phdr, phnum, interp, strsec, &dyninf, sec_order);
@@ -558,7 +704,7 @@ namespace TidePool
                 /* if building executable or DLL, then relocate each section except the GOT which is already relocated */
                 //        ret = final_sections_reloc(s1);
                 //        if (ret)
-                //            goto the_end;
+                //            return ret;
                 //        tidy_section_headers(s1, sec_order);
 
                 /* Perform relocation to GOT or PLT entries */
@@ -572,11 +718,7 @@ namespace TidePool
             ret = tcc_write_elf_file(tp, filename, phnum, phdr, file_offset, sec_order);
             tp.nb_sections = shnum;
 
-        the_end:
-            //    tcc_free(sec_order);
-            //    tcc_free(phdr);
             return ret;
-
         }
 
         public static int tp_output_file(TidePool tp, string filename)
@@ -609,9 +751,9 @@ namespace TidePool
     //from tcc.h
     public enum OUTPUTFORMAT
     {
-        TP_OUTPUT_FORMAT_ELF = 0, /* default output format: ELF */
-        TP_OUTPUT_FORMAT_BINARY = 1, /* binary image output */
-        TP_OUTPUT_FORMAT_COFF = 2 /* COFF */
+        TP_OUTPUT_FORMAT_ELF = 0,       /* default output format: ELF */
+        TP_OUTPUT_FORMAT_BINARY = 1,    /* binary image output */
+        TP_OUTPUT_FORMAT_COFF = 2       /* COFF */
     }
 
     //-------------------------------------------------------------------------
@@ -623,218 +765,219 @@ namespace TidePool
     {
         public const int EHDRSIZE = 52;
 
-        public byte[] e_ident /*[EI_NIDENT]*/;	/* Magic number and other info */
-        public int e_type;			/* Object file type */
-        public int e_machine;		/* Architecture */
-        public int e_version;		/* Object file version */
-        public int e_entry;		/* Entry point virtual address */
-        public int e_phoff;		/* Program header table file offset */
-        public int e_shoff;		/* Section header table file offset */
-        public int e_flags;		/* Processor-specific flags */
-        public int e_ehsize;		/* ELF header size in bytes */
-        public int e_phentsize;	/* Program header table entry size */
-        public int e_phnum;		/* Program header table entry count */
-        public int e_shentsize;	/* Section header table entry size */
-        public int e_shnum;		/* Section header table entry count */
-        public int e_shstrndx;		/* Section header string table index */
+        public byte[] e_ident;	    /* Magic number and other info */
+        public ETYPE e_type;		/* Object file type */
+        public EMACHINE e_machine;	/* Architecture */
+        public EVERSION e_version;	/* Object file version */
+        public uint e_entry;		    /* Entry point virtual address */
+        public uint e_phoff;		    /* Program header table file offset */
+        public uint e_shoff;		    /* Section header table file offset */
+        public uint e_flags;		    /* Processor-specific flags */
+        public ushort e_ehsize;		    /* ELF header size in bytes */
+        public ushort e_phentsize;	    /* Program header table entry size */
+        public ushort e_phnum;		    /* Program header table entry count */
+        public ushort e_shentsize;	    /* Section header table entry size */
+        public ushort e_shnum;		    /* Section header table entry count */
+        public ushort e_shstrndx;		/* Section header string table index */
 
-        public Elf32_Ehdr() {
+        public Elf32_Ehdr()
+        {
+            e_ident = new byte[16];
 
-            e_ident  = new byte[16];
-
-                    /* fill header */
-                e_ident[0] = 0x7f;
-                e_ident[1] = 'E';
-                e_ident[2] = 'L';
-                e_ident[3] = 'F';
-                e_ident[4] = 1;         /* 32-bit objects */
-                e_ident[5] = 1;         /* 2's complement, little endian */
-                e_ident[6] = EV_CURRENT;
+            /* fill header */
+            e_ident[0] = 0x7f;
+            e_ident[1] = (byte)'E';
+            e_ident[2] = (byte)'L';
+            e_ident[3] = (byte)'F';
+            e_ident[4] = 1;                 /* 32-bit objects */
+            e_ident[5] = 1;                 /* 2's complement, little endian */
+            e_ident[6] = 1;                 // original version of ELF. 
+            for (int i = 7; i < 16; i++)
+            {
+                e_ident[i] = 0;
+            }
+            e_entry = 0;
+            e_phoff = 0;
+            e_shoff = 0;
+            e_flags = 0;
+            e_ehsize = EHDRSIZE;
+            e_phentsize = 0;
+            e_phnum = 0;
+            e_shentsize = 0;
+            e_shnum = 0;
+            e_shstrndx = 0;
         }
 
-
+        public void writeOut(FileStream f)
+        {
+            byte[] data = new byte[EHDRSIZE];
+            e_ident.CopyTo(data, 0);
+            BitConverter.GetBytes((ushort)e_type).CopyTo(data, 16);
+            BitConverter.GetBytes((ushort)e_machine).CopyTo(data, 18);
+            BitConverter.GetBytes((uint)e_version).CopyTo(data, 20);
+            BitConverter.GetBytes(e_entry).CopyTo(data, 24);
+            BitConverter.GetBytes(e_phoff).CopyTo(data, 28);
+            BitConverter.GetBytes(e_shoff).CopyTo(data, 32);
+            BitConverter.GetBytes(e_flags).CopyTo(data, 36);
+            BitConverter.GetBytes(e_ehsize).CopyTo(data, 40);
+            BitConverter.GetBytes(e_phentsize).CopyTo(data, 42);
+            BitConverter.GetBytes(e_phnum).CopyTo(data, 44);
+            BitConverter.GetBytes(e_shentsize).CopyTo(data, 46);
+            BitConverter.GetBytes(e_shnum).CopyTo(data, 48);
+            BitConverter.GetBytes(e_shstrndx).CopyTo(data, 50);
+            f.Write(data, 0, EHDRSIZE);
+        }
     }
 
-    /* Fields in the e_ident array.  The EI_* macros are indices into the
-   array.  The macros under each EI_* macro are the values the byte may have.  */
+    /* Legal values for e_type (object file type).  */
+    public enum ETYPE : ushort
+    {
+        ET_NONE = 0,		    /* No file type */
+        ET_REL = 1,		        /* Relocatable file */
+        ET_EXEC = 2,		    /* Executable file */
+        ET_DYN = 3,		        /* Shared object file */
+        ET_CORE = 4,		    /* Core file */
+        ET_NUM = 5,		        /* Number of defined types */
+        ET_LOOS = 0xfe00,	    /* OS-specific range start */
+        ET_HIOS = 0xfeff,	    /* OS-specific range end */
+        ET_LOPROC = 0xff00,	    /* Processor-specific range start */
+        ET_HIPROC = 0xffff		/* Processor-specific range end */
+    }
 
-#define EI_MAG0		0		/* File identification byte 0 index */
-#define ELFMAG0		0x7f		/* Magic number byte 0 */
+    /* Legal values for e_machine (architecture).  */
+    public enum EMACHINE : ushort
+    {
+        EM_NONE = 0,		    /* No machine */
+        EM_M32 = 1,	            /* AT&T WE 32100 */
+        EM_SPARC = 2,	        /* SUN SPARC */
+        EM_386 = 3,	            /* Intel 80386 */
+        EM_68K = 4,	            /* Motorola m68k family */
+        EM_88K = 5,	            /* Motorola m88k family */
+        EM_860 = 7,	            /* Intel 80860 */
+        EM_MIPS = 8,	        /* MIPS R3000 big-endian */
+        EM_S370 = 9,	        /* IBM System/370 */
+        EM_MIPS_RS3_LE = 10,	/* MIPS R3000 little-endian */
 
-#define EI_MAG1		1		/* File identification byte 1 index */
-#define ELFMAG1		'E'		/* Magic number byte 1 */
+        EM_PARISC = 15,	        /* HPPA */
+        EM_VPP500 = 17,	        /* Fujitsu VPP500 */
+        EM_SPARC32PLUS = 18,	/* Sun's "v8plus" */
+        EM_960 = 19,	        /* Intel 80960 */
+        EM_PPC = 20,	        /* PowerPC */
+        EM_PPC64 = 21,	        /* PowerPC 64-bit */
+        EM_S390 = 22,	        /* IBM S390 */
 
-#define EI_MAG2		2		/* File identification byte 2 index */
-#define ELFMAG2		'L'		/* Magic number byte 2 */
+        EM_V800 = 36,	        /* NEC V800 series */
+        EM_FR20 = 37,	        /* Fujitsu FR20 */
+        EM_RH32 = 38,	        /* TRW RH-32 */
+        EM_RCE = 39,	        /* Motorola RCE */
+        EM_ARM = 40,	        /* ARM */
+        EM_FAKE_ALPHA = 41,		/* Digital Alpha */
+        EM_SH = 42,	            /* Hitachi SH */
+        EM_SPARCV9 = 43,	    /* SPARC v9 64-bit */
+        EM_TRICORE = 44,	    /* Siemens Tricore */
+        EM_ARC = 45,	        /* Argonaut RISC Core */
+        EM_H8_300 = 46,	        /* Hitachi H8/300 */
+        EM_H8_300H = 47,	    /* Hitachi H8/300H */
+        EM_H8S = 48,	        /* Hitachi H8S */
+        EM_H8_500 = 49,	        /* Hitachi H8/500 */
+        EM_IA_64 = 50,	        /* Intel Merced */
+        EM_MIPS_X = 51,	        /* Stanford MIPS-X */
+        EM_COLDFIRE = 52,		/* Motorola Coldfire */
+        EM_68HC12 = 53,		    /* Motorola M68HC12 */
+        EM_MMA = 54,	        /* Fujitsu MMA Multimedia Accelerator*/
+        EM_PCP = 55,	        /* Siemens PCP */
+        EM_NCPU = 56,	        /* Sony nCPU embedded RISC */
+        EM_NDR1 = 57,           /* Denso NDR1 microprocessor */
+        EM_STARCORE = 58,	    /* Motorola Start*Core processor */
+        EM_ME16 = 59,	        /* Toyota ME16 processor */
+        EM_ST100 = 60,	        /* STMicroelectronic ST100 processor */
+        EM_TINYJ = 61,	        /* Advanced Logic Corp. Tinyj emb.fam*/
+        EM_X86_64 = 62,	        /* AMD x86-64 architecture */
+        EM_PDSP = 63,		    /* Sony DSP Processor */
 
-#define EI_MAG3		3		/* File identification byte 3 index */
-#define ELFMAG3		'F'		/* Magic number byte 3 */
+        EM_FX66 = 66,	        /* Siemens FX66 microcontroller */
+        EM_ST9PLUS = 67,	    /* STMicroelectronics ST9+ 8/16 mc */
+        EM_ST7 = 68,	        /* STMicroelectronics ST7 8 bit mc */
+        EM_68HC16 = 69,		    /* Motorola MC68HC16 microcontroller */
+        EM_68HC11 = 70,		    /* Motorola MC68HC11 microcontroller */
+        EM_68HC08 = 71,	        /* Motorola MC68HC08 microcontroller */
+        EM_68HC05 = 72,	        /* Motorola MC68HC05 microcontroller */
+        EM_SVX = 73,	        /* Silicon Graphics SVx */
+        EM_ST19 = 74,	        /* STMicroelectronics ST19 8 bit mc */
+        EM_VAX = 75,	        /* Digital VAX */
+        EM_CRIS = 76,	        /* Axis Communications 32-bit embedded processor */
+        EM_JAVELIN = 77,	    /* Infineon Technologies 32-bit embedded processor */
+        EM_FIREPATH = 78,		/* Element 14 64-bit DSP Processor */
+        EM_ZSP = 79,	        /* LSI Logic 16-bit DSP Processor */
+        EM_MMIX = 80,	        /* Donald Knuth's educational 64-bit processor */
+        EM_HUANY = 81,	        /* Harvard University machine-independent object files */
+        EM_PRISM = 82,	        /* SiTera Prism */
+        EM_AVR = 83,	        /* Atmel AVR 8-bit microcontroller */
+        EM_FR30 = 84,	        /* Fujitsu FR30 */
+        EM_D10V = 85,	        /* Mitsubishi D10V */
+        EM_D30V = 86,		    /* Mitsubishi D30V */
+        EM_V850 = 87,	        /* NEC v850 */
+        EM_M32R = 88,	        /* Mitsubishi M32R */
+        EM_MN10300 = 89,	    /* Matsushita MN10300 */
+        EM_MN10200 = 90,	    /* Matsushita MN10200 */
+        EM_PJ = 91,	            /* picoJava */
+        EM_OPENRISC = 92,		/* OpenRISC 32-bit embedded processor */
+        EM_ARC_A5 = 93,	        /* ARC Cores Tangent-A5 */
+        EM_XTENSA = 94,	        /* Tensilica Xtensa Architecture */
+        EM_AARCH64 = 183,	    /* ARM AARCH64 */
+        EM_TILEPRO = 188,	    /* Tilera TILEPro */
+        EM_TILEGX = 191,		/* Tilera TILE-Gx */
+        EM_NUM = 192,
 
-/* Conglomeration of the identification bytes, for easy testing as a word.  */
-#define	ELFMAG		"\177ELF"
-#define	SELFMAG		4
+        /* If it is necessary to assign new unofficial EM_* values, please
+           pick large random numbers (0x8523, 0xa7f2, etc.) to minimize the
+           chances of collision with official or non-GNU unofficial values.  */
+        EM_ALPHA = 0x9026,
+        EM_C60 = 0x9c60
+    }
 
-#define EI_CLASS	4		/* File class byte index */
-#define ELFCLASSNONE	0		/* Invalid class */
-#define ELFCLASS32	1		/* 32-bit objects */
-#define ELFCLASS64	2		/* 64-bit objects */
-#define ELFCLASSNUM	3
-
-#define EI_DATA		5		/* Data encoding byte index */
-#define ELFDATANONE	0		/* Invalid data encoding */
-#define ELFDATA2LSB	1		/* 2's complement, little endian */
-#define ELFDATA2MSB	2		/* 2's complement, big endian */
-#define ELFDATANUM	3
-
-#define EI_VERSION	6		/* File version byte index */
-					/* Value must be EV_CURRENT */
-
-#define EI_OSABI	7		/* OS ABI identification */
-#define ELFOSABI_NONE		0	/* UNIX System V ABI */
-#define ELFOSABI_SYSV		0	/* Alias.  */
-#define ELFOSABI_HPUX		1	/* HP-UX */
-#define ELFOSABI_NETBSD		2	/* NetBSD.  */
-#define ELFOSABI_GNU		3	/* Object uses GNU ELF extensions.  */
-#define ELFOSABI_LINUX		ELFOSABI_GNU /* Compatibility alias.  */
-#define ELFOSABI_SOLARIS	6	/* Sun Solaris.  */
-#define ELFOSABI_AIX		7	/* IBM AIX.  */
-#define ELFOSABI_IRIX		8	/* SGI Irix.  */
-#define ELFOSABI_FREEBSD	9	/* FreeBSD.  */
-#define ELFOSABI_TRU64		10	/* Compaq TRU64 UNIX.  */
-#define ELFOSABI_MODESTO	11	/* Novell Modesto.  */
-#define ELFOSABI_OPENBSD	12	/* OpenBSD.  */
-#define ELFOSABI_ARM_AEABI	64	/* ARM EABI */
-#define ELFOSABI_ARM		97	/* ARM */
-#define ELFOSABI_STANDALONE	255	/* Standalone (embedded) application */
-
-#define EI_ABIVERSION	8		/* ABI version */
-
-#define EI_PAD		9		/* Byte index of padding bytes */
-
-/* Legal values for e_type (object file type).  */
-#define ET_NONE		0		/* No file type */
-#define ET_REL		1		/* Relocatable file */
-#define ET_EXEC		2		/* Executable file */
-#define ET_DYN		3		/* Shared object file */
-#define ET_CORE		4		/* Core file */
-#define	ET_NUM		5		/* Number of defined types */
-#define ET_LOOS		0xfe00		/* OS-specific range start */
-#define ET_HIOS		0xfeff		/* OS-specific range end */
-#define ET_LOPROC	0xff00		/* Processor-specific range start */
-#define ET_HIPROC	0xffff		/* Processor-specific range end */
-
-/* Legal values for e_machine (architecture).  */
-#define EM_NONE		 0		/* No machine */
-#define EM_M32		 1		/* AT&T WE 32100 */
-#define EM_SPARC	 2		/* SUN SPARC */
-#define EM_386		 3		/* Intel 80386 */
-#define EM_68K		 4		/* Motorola m68k family */
-#define EM_88K		 5		/* Motorola m88k family */
-#define EM_860		 7		/* Intel 80860 */
-#define EM_MIPS		 8		/* MIPS R3000 big-endian */
-#define EM_S370		 9		/* IBM System/370 */
-#define EM_MIPS_RS3_LE	10		/* MIPS R3000 little-endian */
-
-#define EM_PARISC	15		/* HPPA */
-#define EM_VPP500	17		/* Fujitsu VPP500 */
-#define EM_SPARC32PLUS	18		/* Sun's "v8plus" */
-#define EM_960		19		/* Intel 80960 */
-#define EM_PPC		20		/* PowerPC */
-#define EM_PPC64	21		/* PowerPC 64-bit */
-#define EM_S390		22		/* IBM S390 */
-
-#define EM_V800		36		/* NEC V800 series */
-#define EM_FR20		37		/* Fujitsu FR20 */
-#define EM_RH32		38		/* TRW RH-32 */
-#define EM_RCE		39		/* Motorola RCE */
-#define EM_ARM		40		/* ARM */
-#define EM_FAKE_ALPHA	41		/* Digital Alpha */
-#define EM_SH		42		/* Hitachi SH */
-#define EM_SPARCV9	43		/* SPARC v9 64-bit */
-#define EM_TRICORE	44		/* Siemens Tricore */
-#define EM_ARC		45		/* Argonaut RISC Core */
-#define EM_H8_300	46		/* Hitachi H8/300 */
-#define EM_H8_300H	47		/* Hitachi H8/300H */
-#define EM_H8S		48		/* Hitachi H8S */
-#define EM_H8_500	49		/* Hitachi H8/500 */
-#define EM_IA_64	50		/* Intel Merced */
-#define EM_MIPS_X	51		/* Stanford MIPS-X */
-#define EM_COLDFIRE	52		/* Motorola Coldfire */
-#define EM_68HC12	53		/* Motorola M68HC12 */
-#define EM_MMA		54		/* Fujitsu MMA Multimedia Accelerator*/
-#define EM_PCP		55		/* Siemens PCP */
-#define EM_NCPU		56		/* Sony nCPU embedded RISC */
-#define EM_NDR1		57		/* Denso NDR1 microprocessor */
-#define EM_STARCORE	58		/* Motorola Start*Core processor */
-#define EM_ME16		59		/* Toyota ME16 processor */
-#define EM_ST100	60		/* STMicroelectronic ST100 processor */
-#define EM_TINYJ	61		/* Advanced Logic Corp. Tinyj emb.fam*/
-#define EM_X86_64	62		/* AMD x86-64 architecture */
-#define EM_PDSP		63		/* Sony DSP Processor */
-
-#define EM_FX66		66		/* Siemens FX66 microcontroller */
-#define EM_ST9PLUS	67		/* STMicroelectronics ST9+ 8/16 mc */
-#define EM_ST7		68		/* STMicroelectronics ST7 8 bit mc */
-#define EM_68HC16	69		/* Motorola MC68HC16 microcontroller */
-#define EM_68HC11	70		/* Motorola MC68HC11 microcontroller */
-#define EM_68HC08	71		/* Motorola MC68HC08 microcontroller */
-#define EM_68HC05	72		/* Motorola MC68HC05 microcontroller */
-#define EM_SVX		73		/* Silicon Graphics SVx */
-#define EM_ST19		74		/* STMicroelectronics ST19 8 bit mc */
-#define EM_VAX		75		/* Digital VAX */
-#define EM_CRIS		76		/* Axis Communications 32-bit embedded processor */
-#define EM_JAVELIN	77		/* Infineon Technologies 32-bit embedded processor */
-#define EM_FIREPATH	78		/* Element 14 64-bit DSP Processor */
-#define EM_ZSP		79		/* LSI Logic 16-bit DSP Processor */
-#define EM_MMIX		80		/* Donald Knuth's educational 64-bit processor */
-#define EM_HUANY	81		/* Harvard University machine-independent object files */
-#define EM_PRISM	82		/* SiTera Prism */
-#define EM_AVR		83		/* Atmel AVR 8-bit microcontroller */
-#define EM_FR30		84		/* Fujitsu FR30 */
-#define EM_D10V		85		/* Mitsubishi D10V */
-#define EM_D30V		86		/* Mitsubishi D30V */
-#define EM_V850		87		/* NEC v850 */
-#define EM_M32R		88		/* Mitsubishi M32R */
-#define EM_MN10300	89		/* Matsushita MN10300 */
-#define EM_MN10200	90		/* Matsushita MN10200 */
-#define EM_PJ		91		/* picoJava */
-#define EM_OPENRISC	92		/* OpenRISC 32-bit embedded processor */
-#define EM_ARC_A5	93		/* ARC Cores Tangent-A5 */
-#define EM_XTENSA	94		/* Tensilica Xtensa Architecture */
-#define EM_AARCH64	183		/* ARM AARCH64 */
-#define EM_TILEPRO	188		/* Tilera TILEPro */
-#define EM_TILEGX	191		/* Tilera TILE-Gx */
-#define EM_NUM		192
-
-/* If it is necessary to assign new unofficial EM_* values, please
-   pick large random numbers (0x8523, 0xa7f2, etc.) to minimize the
-   chances of collision with official or non-GNU unofficial values.  */
-
-#define EM_ALPHA	0x9026
-#define EM_C60		0x9c60
-
-/* Legal values for e_version (version).  */
-
-#define EV_NONE		0		/* Invalid ELF version */
-#define EV_CURRENT	1		/* Current version */
-#define EV_NUM		2
-
+    /* Legal values for e_version (version).  */
+    public enum EVERSION : uint
+    {
+        EV_NONE = 0,		/* Invalid ELF version */
+        EV_CURRENT = 1,		/* Current version */
+        EV_NUM = 2
+    }
 
     //-------------------------------------------------------------------------
 
     /* Section header.  */
     public class Elf32_Shdr
     {
-        public int sh_name;		/* Section name (string tbl index) */
-        public SECTIONTYPE sh_type;	/* Section type */
+        public const int SHDRSIZE = 40;
+
+        public int sh_name;		        /* Section name (string tbl index) */
+        public SECTIONTYPE sh_type;	    /* Section type */
         public SECTIONFLAGS sh_flags;	/* Section flags */
-        public int sh_addr;		/* Section virtual addr at execution */
-        public int sh_offset;		/* Section file offset */
-        public int sh_size;		/* Section size in bytes */
-        public int sh_link;		/* Link to another section */
-        public int sh_info;		/* Additional section information */
-        public int sh_addralign;	/* Section alignment */
-        public int sh_entsize;		/* Entry size if section holds table */
+        public int sh_addr;		        /* Section virtual addr at execution */
+        public int sh_offset;		    /* Section file offset */
+        public int sh_size;		        /* Section size in bytes */
+        public int sh_link;		        /* Link to another section */
+        public int sh_info;		        /* Additional section information */
+        public int sh_addralign;	    /* Section alignment */
+        public int sh_entsize;		    /* Entry size if section holds table */
+    }
+
+    /* Special section indices.  */
+    public enum SECTIONIDX
+    {
+        SHN_UNDEF = 0,	                /* Undefined section */
+        SHN_LORESERVE = 0xff00,	        /* Start of reserved indices */
+        SHN_LOPROC = 0xff00,		    /* Start of processor-specific */
+        SHN_BEFORE = 0xff00,	        /* Order section before all others (Solaris).  */
+        SHN_AFTER = 0xff01,	            /* Order section after all others (Solaris).  */
+        SHN_HIPROC = 0xff1f,		    /* End of processor-specific */
+        SHN_LOOS = 0xff20,		        /* Start of OS-specific */
+        SHN_HIOS = 0xff3f,		        /* End of OS-specific */
+        SHN_ABS = 0xfff1,	            /* Associated symbol is absolute */
+        SHN_COMMON = 0xfff2,	        /* Associated symbol is common */
+        SHN_XINDEX = 0xffff,		    /* Index is in extra table.  */
+        SHN_HIRESERVE = 0xffff		    /* End of reserved indices */
     }
 
     /* Legal values for sh_type (section type).  */
@@ -906,12 +1049,12 @@ namespace TidePool
     /* Symbol table entry.  */
     public class Elf32_Sym
     {
-        int st_name;		/* Symbol name (string tbl index) */
-        int st_value;		/* Symbol value */
-        int st_size;		/* Symbol size */
-        char st_info;		/* Symbol type and binding */
-        char st_other;		/* Symbol visibility */
-        int st_shndx;		/* Section index */
+        public int st_name;		    /* Symbol name (string tbl index) */
+        public int st_value;		/* Symbol value */
+        public int st_size;		    /* Symbol size */
+        public char st_info;		/* Symbol type and binding */
+        public char st_other;		/* Symbol visibility */
+        public int st_shndx;		/* Section index */
     }
 
     /* Program segment header.  */
@@ -919,14 +1062,19 @@ namespace TidePool
     {
         public const int PHDRSIZE = 32;
 
-        public int p_type;		/* Segment type */
+        public int p_type;		    /* Segment type */
         public int p_offset;		/* Segment file offset */
-        public int p_vaddr;		/* Segment virtual address */
-        public int p_paddr;		/* Segment physical address */
+        public int p_vaddr;		    /* Segment virtual address */
+        public int p_paddr;		    /* Segment physical address */
         public int p_filesz;		/* Segment size in file */
-        public int p_memsz;		/* Segment size in memory */
-        public int p_flags;		/* Segment flags */
-        public int p_align;		/* Segment alignment */
+        public int p_memsz;		    /* Segment size in memory */
+        public int p_flags;		    /* Segment flags */
+        public int p_align;		    /* Segment alignment */
+
+        public void writeOut(FileStream f)
+        {
+            //throw new NotImplementedException();
+        }
     }
 
     //-------------------------------------------------------------------------
@@ -979,7 +1127,6 @@ namespace TidePool
 
         /* Keep this the last entry.  */
         R_386_NUM = 44
-
     }
 }
 

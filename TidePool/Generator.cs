@@ -110,7 +110,7 @@ namespace TidePool
         public void g(byte c)
         {
             int ind1;
-            if (comp.nocode_wanted)
+            if (comp.nocode_wanted != 0)
                 return;
             ind1 = comp.ind + 1;
             if (ind1 > Section.curTextSection.data_allocated)

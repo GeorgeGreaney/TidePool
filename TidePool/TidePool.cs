@@ -48,7 +48,7 @@ namespace TidePool
         public int static_link;		/* if true, static linking is performed */
         public int rdynamic;			/* if true, all symbols are exported */
         public int symbolic;			/* if true, resolve symbols in the current module first */
-        public int alacarte_link;		/* if true, only link in referenced objects from archive */
+        public bool alacarte_link;		/* if true, only link in referenced objects from archive */
 
         public string tcc_lib_path;		/* CONFIG_TCCDIR or -B option */
         public string soname;			/* as specified on the command line (-soname) */
@@ -56,7 +56,7 @@ namespace TidePool
         public int enable_new_dtags;	/* ditto, (-Wl,--enable-new-dtags) */
 
         /* output type, see TCC_OUTPUT_XXX */
-        public OUTPUTTYPE output_type;  
+        public OUTPUTTYPE output_type;
 
         /* output format, see TCC_OUTPUT_FORMAT_xxx */
         public OUTPUTFORMAT output_format;
@@ -68,13 +68,13 @@ namespace TidePool
         public bool dollars_in_identifiers;	/* allows '$' char in identifiers */
         public bool ms_bitfields;			/* if true, emulate MS algorithm for aligning bitfields */
 
-        //    /* warning switches */
-        //    int warn_write_strings;
-        //    int warn_unsupported;
-        //    int warn_error;
-        //    int warn_none;
-        //    int warn_implicit_function_declaration;
-        //    int warn_gcc_compat;
+        /* warning switches */
+        public int warn_write_strings;
+        public int warn_unsupported;
+        public int warn_error;
+        public int warn_none;
+        public int warn_implicit_function_declaration;
+        public int warn_gcc_compat;
 
         //    /* compile with debug symbol (and use them if error during execution) */
         //    int do_debug;
@@ -169,12 +169,12 @@ namespace TidePool
         //    struct InlineFunc **inline_fns;
         //    int nb_inline_fns;
 
-            /* sections */
-            public List<Section> sections;
-            public int nb_sections;            /* number of sections, including first dummy section */
+        /* sections */
+        public List<Section> sections;
+        public int nb_sections;                 /* number of sections, including first dummy section */
 
-        //    Section **priv_sections;
-        //    int nb_priv_sections; /* number of private sections */
+        public List<Section> priv_sections;
+        public int nb_priv_sections;                   /* number of private sections */
 
         //    /* got & plt handling */
         //    Section *got;
@@ -186,8 +186,8 @@ namespace TidePool
         //    /* exported dynamic symbol section */
         //    Section *dynsym;
 
-        //    /* copy of the global symtab_section variable */
-        //    Section *symtab;
+        /* copy of the global symtab_section variable */
+        public Section symtab;
 
         //    /* extra attributes (eg. GOT/PLT value) for symtab symbols */
         //    struct sym_attr *sym_attrs;
@@ -227,9 +227,7 @@ namespace TidePool
         int option_pthread;			    /* -pthread option */
         //    int argc;
         //    char **argv;
-
-
-
+        
         public const int AFF_PRINT_ERROR = 0x10;        /* print error if file not found */
         public const int AFF_REFERENCED_DLL = 0x20;     /* load a referenced dll from another dll */
         public const int AFF_TYPE_BIN = 0x40;           /* file to add is binary */
@@ -260,6 +258,8 @@ namespace TidePool
             ifdef_stack_ptr = 0;
 
             verbose = 0;
+
+            output_type = OUTPUTTYPE.TP_OUTPUT_NONE;
         }
 
         public void print_dirs() { }
@@ -272,7 +272,7 @@ namespace TidePool
         public int compile(string[] args)
         {
             int ret = 0;
-            int opt;
+            Options.RETCODE opt;
             int n = 0;
             int t = 0;
             //    unsigned start_time = 0;
@@ -281,7 +281,7 @@ namespace TidePool
             //    FILE *ppfp = stdout;
 
             //redo:
-            Options.parseOptions(this, args);         //parse options
+            opt = Options.tp_parse_args(this, args);         //parse options
 
 
             //    if ((n | t) == 0) 
@@ -582,16 +582,24 @@ namespace TidePool
 
     //-------------------------------------------------------------------------
 
-    public enum FILETYPE { NONE, C, ASM, ASMPP, LIB }
+    public enum FILETYPE { 
+        NONE, 
+        C, 
+        ASM, 
+        ASMPP, 
+        LIB 
+    }
 
     public class FileSpec
     {
-        public string name;
         public FILETYPE ftype;
+        public bool alacarte;
+        public string name;
 
-        public FileSpec(string _name, FILETYPE _ftype)
+        public FileSpec(string _name, bool _alacarte, FILETYPE _ftype)
         {
             name = _name;
+            alacarte = _alacarte;
             ftype = _ftype;
         }
     }

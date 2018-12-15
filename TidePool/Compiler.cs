@@ -136,7 +136,7 @@ namespace TidePool
         public int pvtop;
 
         public bool const_wanted;       /* true if constant wanted */
-        public bool nocode_wanted;      /* true if no code generation wanted for an expression */
+        public uint nocode_wanted;      /* true if no code generation wanted for an expression */
         public bool global_expr;        /* true if compound literals must be allocated globally (used during initializers parsing */
 
         public CType func_vt;           /* current function return type (used by return instruction) */
@@ -275,12 +275,97 @@ namespace TidePool
             //#endif
 
         }
-        public void put_extern_sym2() { }
 
-        public void put_extern_sym()
+        /* update sym->c so that it points to an external symbol in section 'section' with value 'value' */
+        public void put_extern_sym2(Sym sym, int sh_num, int value, int size, int can_add_underscore)
         {
+
+//    int sym_type, sym_bind, info, other, t;
+//    ElfSym *esym;
+//    const char *name;
+//    char buf1[256];
+//#ifdef CONFIG_TCC_BCHECK
+//    char buf[32];
+//#endif
+
+//    if (!sym->c) {
+//        name = get_tok_str(sym->v, NULL);
+//#ifdef CONFIG_TCC_BCHECK
+//        if (tcc_state->do_bounds_check) {
+//            /* XXX: avoid doing that for statics ? */
+//            /* if bound checking is activated, we change some function
+//            names by adding the "__bound" prefix */
+//            switch(sym->v) {
+//#ifdef TCC_TARGET_PE
+//                /* XXX: we rely only on malloc hooks */
+//            case TOK_malloc:
+//            case TOK_free:
+//            case TOK_realloc:
+//            case TOK_memalign:
+//            case TOK_calloc:
+//#endif
+//            case TOK_memcpy:
+//            case TOK_memmove:
+//            case TOK_memset:
+//            case TOK_strlen:
+//            case TOK_strcpy:
+//            case TOK_alloca:
+//                strcpy(buf, "__bound_");
+//                strcat(buf, name);
+//                name = buf;
+//                break;
+//            }
+//        }
+//#endif
+//        t = sym->type.t;
+//        if ((t & VT_BTYPE) == VT_FUNC) {
+//            sym_type = STT_FUNC;
+//        } else if ((t & VT_BTYPE) == VT_VOID) {
+//            sym_type = STT_NOTYPE;
+//        } else {
+//            sym_type = STT_OBJECT;
+//        }
+//        if (t & VT_STATIC)
+//            sym_bind = STB_LOCAL;
+//        else
+//            sym_bind = STB_GLOBAL;
+//        other = 0;
+//#ifdef TCC_TARGET_PE
+//        if (sym_type == STT_FUNC && sym->type.ref) {
+//            Sym *ref = sym->type.ref;
+//            if (ref->f.func_call == FUNC_STDCALL && can_add_underscore) {
+//                sprintf(buf1, "_%s@%d", name, ref->f.func_args * PTR_SIZE);
+//                name = buf1;
+//                other |= ST_PE_STDCALL;
+//                can_add_underscore = 0;
+//            }
+//        }
+//#endif
+//        if (tcc_state->leading_underscore && can_add_underscore) {
+//            buf1[0] = '_';
+//            pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
+//            name = buf1;
+//        }
+//        if (sym->asm_label)
+//            name = get_tok_str(sym->asm_label, NULL);
+//        info = ELFW(ST_INFO)(sym_bind, sym_type);
+//        sym->c = put_elf_sym(symtab_section, value, size, info, other, sh_num, name);
+//    } else {
+//        esym = elfsym(sym);
+//        esym->st_value = value;
+//        esym->st_size = size;
+//        esym->st_shndx = sh_num;
+//    }
+//    update_storage(sym);
         }
 
+        public void put_extern_sym(Sym sym, Section section, int value, int size)
+        {
+            int sh_num = (section != null) ? section.sh_num : (int)SECTIONIDX.SHN_UNDEF;
+            put_extern_sym2(sym, sh_num, value, size, 1);
+        }
+
+        /* add a new relocation entry to symbol 'sym' in section 's' */
         public void greloca(Section s, Sym sym, int offset, I386RELOCS type, uint addend)
         {
             //int c = 0;
@@ -411,7 +496,7 @@ namespace TidePool
             when code is unsuppressed again.
 
             Same logic below in vswap(); */
-            if (vtop >= 1 && !nocode_wanted)
+            if (vtop >= 1 && (nocode_wanted == 0))
             {
                 v = vstack[vtop].r & VT_VALMASK;
                 if (v == VT_CMP || (v & ~1) == VT_JMP)
@@ -562,7 +647,7 @@ namespace TidePool
             {
                 if ((gen.reg_classes[r] & rc) != 0)
                 {
-                    if (nocode_wanted)
+                    if (nocode_wanted != 0)
                         return r;
                     for (ppos = 1; ppos <= vtop; ppos++)
                     {
@@ -2983,12 +3068,12 @@ namespace TidePool
 
         public void gen_function(Sym sym)
         {
-            nocode_wanted = false;
+            nocode_wanted = 0;
             ind = Section.curTextSection.data_offset;
 
             /* NOTE: we patch the symbol size later */
-            //put_extern_sym(sym, Section.curTextSection, ind, 0);
-            //funcname = get_tok_str(sym->v, NULL);
+            put_extern_sym(sym, Section.curTextSection, ind, 0);
+            funcname = prep.get_tok_str(sym.v, null);
             func_ind = ind;
 
             /* Initialize VLA state */
@@ -3000,21 +3085,21 @@ namespace TidePool
 
             /* push a dummy symbol to enable local sym storage */
             //    sym_push2(&local_stack, SYM_FIELD, 0, 0);
-            //    local_scope = 1; /* for function parameters */
+            local_scope = 1;                    /* for function parameters */
             gen.gfunc_prolog(sym.type);
-            //    local_scope = 0;
-            //    rsym = 0;
+            local_scope = 0;
+            rsym = 0;
             int bsym = 0;       //dummy init vals
             int csym = 0;
             block(ref bsym, ref csym, false);
-            nocode_wanted = false;
+            nocode_wanted = 0;
             //    gsym(rsym);
             //    gfunc_epilog();
             //    Section.curTextSection->data_offset = ind;
             //    label_pop(&global_label_stack, NULL, 0);
 
             /* reset local stack */
-            //    local_scope = 0;
+            local_scope = 0;
             //    sym_pop(&local_stack, NULL, 0);
 
             /* end of function */
@@ -3024,11 +3109,11 @@ namespace TidePool
 
             /* It's better to crash than to generate wrong code */
             Section.curTextSection = null;
-            //    funcname = ""; /* for safety */
-            //    func_vt.t = VT_VOID; /* for safety */
-            //    func_var = 0; /* for safety */
-            //    ind = 0; /* for safety */
-            //    nocode_wanted = 0x80000000;
+            funcname = "";                          /* for safety */
+            func_vt.t = VT_VOID;                    /* for safety */
+            func_var = false;                       /* for safety */
+            ind = 0;                                /* for safety */
+            nocode_wanted = 0x80000000;
             //    check_vstack();
         }
 
