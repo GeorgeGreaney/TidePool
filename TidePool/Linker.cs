@@ -24,5 +24,7 @@ namespace TidePool
 {
     class Linker
     {
+        public const int ELF_PAGE_SIZE = 0x1000;
+
     }
 }

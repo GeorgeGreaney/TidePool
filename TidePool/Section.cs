@@ -25,6 +25,10 @@ namespace TidePool
 {
     public class Section
     {
+        public const int SHDRSIZE = 40;
+        public static readonly byte[] EMPTYSECHDR = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+                                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
         /* from tcc.h - section definition */
         public int data_offset;             /* current data offset */
         public byte[] data;                 /* section data */
@@ -131,7 +135,8 @@ namespace TidePool
         public static void initSection(TidePool tp)
         {
             /* no section zero */
-            //    dynarray_add(&s->sections, &s->nb_sections, NULL);
+            tp.sections.Add(null);
+            tp.nb_sections++;            
 
             /* create standard sections */
             textSection = new Section(tp, ".text", SECTIONTYPE.SHT_PROGBITS, SECTIONFLAGS.SHF_ALLOC | SECTIONFLAGS.SHF_EXECINSTR);
@@ -153,13 +158,91 @@ namespace TidePool
 
         public void tccelf_bounds_new() { }
         public void tccelf_stab_new() { }
-        public void free_section() { }
-        public void tccelf_delete() { }
-        public void tccelf_begin_file() { }
-        public void tccelf_end_file() { }
+
+        public void tccelf_delete(TidePool tp)
+        {
+            int i;
+
+            /* free all sections */
+            //    for(i = 1; i < s1->nb_sections; i++)
+            //        free_section(s1->sections[i]);
+            //    dynarray_reset(&s1->sections, &s1->nb_sections);
+
+            //    for(i = 0; i < s1->nb_priv_sections; i++)
+            //        free_section(s1->priv_sections[i]);
+            //    dynarray_reset(&s1->priv_sections, &s1->nb_priv_sections);
+
+            /* free any loaded DLLs */
+            //    for ( i = 0; i < s1->nb_loaded_dlls; i++) {
+            //        DLLReference *ref = s1->loaded_dlls[i];
+            //        if ( ref->handle )
+            //            FreeLibrary((HMODULE)ref->handle);
+            //    }
+
+            /* free loaded dlls array */
+            //    dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
+            //    tcc_free(s1->sym_attrs);
+
+            //    symtab_section = NULL; /* for tccrun.c:rt_printline() */
+
+        }
+
+        /* save section data state */
+        public void tccelf_begin_file(TidePool tp)
+        {
+            //                Section *s; int i;
+            //    printf("[tccelf.c] tccelf_begin_file \n");
+            //    for (i = 1; i < s1->nb_sections; i++) {
+            //        s = s1->sections[i];
+            //        s->sh_offset = s->data_offset;
+            //    }
+            //    /* disable symbol hashing during compilation */
+            //    s = s1->symtab, s->reloc = s->hash, s->hash = NULL;
+            //#if defined TCC_TARGET_X86_64 && defined TCC_TARGET_PE
+            //    s1->uw_sym = 0;
+            //#endif
+        }
+
+        /* At the end of compilation, convert any UNDEF syms to global, and merge with previously existing symbols */
+        public void tccelf_end_file(TidePool tp)
+        {
+            //            Section *s = s1->symtab;
+            //int first_sym, nb_syms, *tr, i;
+
+            //printf("[tccelf.c] tccelf_end_file \n");
+            //first_sym = s->sh_offset / sizeof (ElfSym);
+            //nb_syms = s->data_offset / sizeof (ElfSym) - first_sym;
+            //s->data_offset = s->sh_offset;
+            //s->link->data_offset = s->link->sh_offset;
+            //s->hash = s->reloc, s->reloc = NULL;
+            //tr = tcc_mallocz(nb_syms * sizeof *tr);
+
+            //for (i = 0; i < nb_syms; ++i) {
+            //    ElfSym *sym = (ElfSym*)s->data + first_sym + i;
+            //    if (sym->st_shndx == SHN_UNDEF
+            //        && ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)
+            //        sym->st_info = ELFW(ST_INFO)(STB_GLOBAL, ELFW(ST_TYPE)(sym->st_info));
+            //    tr[i] = set_elf_sym(s, sym->st_value, sym->st_size, sym->st_info,
+            //        sym->st_other, sym->st_shndx, s->link->data + sym->st_name);
+            //}
+            ///* now update relocations */
+            //for (i = 1; i < s1->nb_sections; i++) {
+            //    Section *sr = s1->sections[i];
+            //    if (sr->sh_type == SHT_RELX && sr->link == s) {
+            //        ElfW_Rel *rel = (ElfW_Rel*)(sr->data + sr->sh_offset);
+            //        ElfW_Rel *rel_end = (ElfW_Rel*)(sr->data + sr->data_offset);
+            //        for (; rel < rel_end; ++rel) {
+            //            int n = ELFW(R_SYM)(rel->r_info) - first_sym;
+            //            //if (n < 0) tcc_error("internal: invalid symbol index in relocation");
+            //            rel->r_info = ELFW(R_INFO)(tr[n], ELFW(R_TYPE)(rel->r_info));
+            //        }
+            //    }
+            //}
+            //tcc_free(tr);
+        }
 
         public static Section new_symtab(TidePool tp, string symtab_name, SECTIONTYPE sh_type, SECTIONFLAGS sh_flags,
-                            string strtab_name, string hash_name, SECTIONFLAGS hash_sh_flags)
+                                        string strtab_name, string hash_name, SECTIONFLAGS hash_sh_flags)
         {
             Section symtab;
             Section strtab;
@@ -168,13 +251,14 @@ namespace TidePool
             int nb_buckets;
 
             symtab = new Section(tp, symtab_name, sh_type, sh_flags);
-            //symtab->sh_entsize = sizeof(ElfW(Sym));
-            //strtab = new_section(s1, strtab_name, SHT_STRTAB, sh_flags);
-            //put_elf_str(strtab, "");
-            //symtab->link = strtab;
-            //put_elf_sym(symtab, 0, 0, 0, 0, 0, NULL);
+            symtab.sh_entsize = Elf32_Sym.SYMENTSIZE;
 
-            //nb_buckets = 1;
+            strtab = new Section(tp, strtab_name, SECTIONTYPE.SHT_STRTAB, sh_flags);
+            strtab.put_elf_str("");
+            symtab.link = strtab;
+            symtab.put_elf_sym(0, 0, 0, 0, 0, null);
+
+            nb_buckets = 1;
 
             //hash = new_section(s1, hash_name, SHT_HASH, hash_sh_flags);
             //hash->sh_entsize = sizeof(int);
@@ -186,7 +270,6 @@ namespace TidePool
             //ptr[1] = 1;
             //memset(ptr + 2, 0, (nb_buckets + 1) * sizeof(int));
             return symtab;
-
         }
 
         public void section_realloc(int new_size)
@@ -242,10 +325,97 @@ namespace TidePool
             return offset;
         }
 
-        public void elf_hash() { }
+        /* elf symbol hashing function */
+        public int elf_hash(string name)
+        {
+            //            unsigned long h = 0, g;
+
+            //printf("[tccelf.c] elf_hash \n");
+            //while (*name) {
+            //    h = (h << 4) + *name++;
+            //    g = h & 0xf0000000;
+            //    if (g)
+            //        h ^= g >> 24;
+            //    h &= ~g;
+            //}
+            //return h;
+            return 0;
+        }
+
         public void rebuild_hash() { }
-        public void put_elf_sym() { }
-        public void find_elf_sym() { }
+
+        /* return the symbol number */
+        public int put_elf_sym(int value, int size, int info, int other, int shndx, string name)
+        {
+            int name_offset;
+            int sym_index = 0;
+            //int nbuckets, h;
+            //ElfW(Sym) *sym;
+            //Section *hs;
+
+            //sym = section_ptr_add(s, sizeof(ElfW(Sym)));
+            //if (name && name[0])
+            //    name_offset = put_elf_str(s->link, name);
+            //else
+            //    name_offset = 0;
+            ///* XXX: endianness */
+            //sym->st_name = name_offset;
+            //sym->st_value = value;
+            //sym->st_size = size;
+            //sym->st_info = info;
+            //sym->st_other = other;
+            //sym->st_shndx = shndx;
+            //sym_index = sym - (ElfW(Sym) *)s->data;
+            //hs = s->hash;
+            //if (hs) {
+            //    int *ptr, *base;
+            //    ptr = section_ptr_add(hs, sizeof(int));
+            //    base = (int *)hs->data;
+            //    /* only add global or weak symbols. */
+            //    if (ELFW(ST_BIND)(info) != STB_LOCAL) {
+            //        /* add another hashing entry */
+            //        nbuckets = base[0];
+            //        h = elf_hash((unsigned char *)s->link->data + name_offset) % nbuckets;
+            //        *ptr = base[2 + h];
+            //        base[2 + h] = sym_index;
+            //        base[1]++;
+            //        /* we resize the hash table */
+            //        hs->nb_hashed_syms++;
+            //        if (hs->nb_hashed_syms > 2 * nbuckets) {
+            //            rebuild_hash(s, 2 * nbuckets);
+            //        }
+            //    } else {
+            //        *ptr = 0;
+            //        base[1]++;
+            //    }
+            //}
+            return sym_index;
+
+        }
+
+        public int find_elf_sym(string name)
+        {
+            //            ElfW(Sym) *sym;
+            //Section *hs;
+            //int nbuckets, sym_index, h;
+            //const char *name1;
+
+            //printf("[tccelf.c] find_elf_sym \n");
+            //hs = s->hash;
+            //if (!hs)
+            //    return 0;
+            //nbuckets = ((int *)hs->data)[0];
+            //h = elf_hash((unsigned char *) name) % nbuckets;
+            //sym_index = ((int *)hs->data)[2 + h];
+            //while (sym_index != 0) {
+            //    sym = &((ElfW(Sym) *)s->data)[sym_index];
+            //    name1 = (char *) s->link->data + sym->st_name;
+            //    if (!strcmp(name, name1))
+            //        return sym_index;
+            //    sym_index = ((int *)hs->data)[2 + nbuckets + sym_index];
+            //}
+            return 0;
+        }
 
         /* return elf symbol value, signal error if 'err' is nonzero */
         public static uint get_elf_sym_addr(TidePool tp, string name, int err)
@@ -265,7 +435,98 @@ namespace TidePool
 
         public void tcc_get_symbol() { }
         public void tcc_get_symbol_err() { }
-        public void set_elf_sym() { }
+
+        /* add an elf symbol : check if it is already defined and patch
+           it. Return symbol index. NOTE that sh_num can be SHN_UNDEF. */
+        public int set_elf_sym(int value, int size, int info, int other, int shndx, string name)
+        {
+            //                ElfW(Sym) *esym;
+            int sym_bind;
+            int sym_index = 0;
+            int sym_type;
+            int esym_bind;
+            //    unsigned char sym_vis, esym_vis, new_vis;
+
+            //    sym_bind = ELFW(ST_BIND)(info);
+            //    sym_type = ELFW(ST_TYPE)(info);
+            //    sym_vis = ELFW(ST_VISIBILITY)(other);
+
+            //    if (sym_bind != STB_LOCAL) {
+            //        /* we search global or weak symbols */
+            //        sym_index = find_elf_sym(s, name);
+            //        if (!sym_index)
+            //            goto do_def;
+            //        esym = &((ElfW(Sym) *)s->data)[sym_index];
+            //        if (esym->st_value == value && esym->st_size == size && esym->st_info == info
+            //            && esym->st_other == other && esym->st_shndx == shndx)
+            //            return sym_index;
+            //        if (esym->st_shndx != SHN_UNDEF) {
+            //            esym_bind = ELFW(ST_BIND)(esym->st_info);
+            //            /* propagate the most constraining visibility */
+            //            /* STV_DEFAULT(0)<STV_PROTECTED(3)<STV_HIDDEN(2)<STV_INTERNAL(1) */
+            //            esym_vis = ELFW(ST_VISIBILITY)(esym->st_other);
+            //            if (esym_vis == STV_DEFAULT) {
+            //                new_vis = sym_vis;
+            //            } else if (sym_vis == STV_DEFAULT) {
+            //                new_vis = esym_vis;
+            //            } else {
+            //                new_vis = (esym_vis < sym_vis) ? esym_vis : sym_vis;
+            //            }
+            //            esym->st_other = (esym->st_other & ~ELFW(ST_VISIBILITY)(-1))
+            //                | new_vis;
+            //            other = esym->st_other; /* in case we have to patch esym */
+            //            if (shndx == SHN_UNDEF) {
+            //                /* ignore adding of undefined symbol if the
+            //                corresponding symbol is already defined */
+            //            } else if (sym_bind == STB_GLOBAL && esym_bind == STB_WEAK) {
+            //                /* global overrides weak, so patch */
+            //                goto do_patch;
+            //            } else if (sym_bind == STB_WEAK && esym_bind == STB_GLOBAL) {
+            //                /* weak is ignored if already global */
+            //            } else if (sym_bind == STB_WEAK && esym_bind == STB_WEAK) {
+            //                /* keep first-found weak definition, ignore subsequents */
+            //            } else if (sym_vis == STV_HIDDEN || sym_vis == STV_INTERNAL) {
+            //                /* ignore hidden symbols after */
+            //            } else if ((esym->st_shndx == SHN_COMMON
+            //                || esym->st_shndx == bss_section->sh_num)
+            //                && (shndx < SHN_LORESERVE
+            //                && shndx != bss_section->sh_num)) {
+            //                    /* data symbol gets precedence over common/bss */
+            //                    goto do_patch;
+            //            } else if (shndx == SHN_COMMON || shndx == bss_section->sh_num) {
+            //                /* data symbol keeps precedence over common/bss */
+            //            } else if (s->sh_flags & SHF_DYNSYM) {
+            //                /* we accept that two DLL define the same symbol */
+            //            } else if (esym->st_other & ST_ASM_SET) {
+            //                /* If the existing symbol came from an asm .set
+            //                we can override.  */
+            //                goto do_patch;
+            //            } else {
+            //#if 0
+            //                printf("new_bind=%x new_shndx=%x new_vis=%x old_bind=%x old_shndx=%x old_vis=%x\n",
+            //                    sym_bind, shndx, new_vis, esym_bind, esym->st_shndx, esym_vis);
+            //#endif
+            //                tcc_error_noabort("'%s' defined twice", name);
+            //            }
+            //        } else {
+            //do_patch:
+            //            esym->st_info = ELFW(ST_INFO)(sym_bind, sym_type);
+            //            esym->st_shndx = shndx;
+            //            new_undef_sym = 1;
+            //            esym->st_value = value;
+            //            esym->st_size = size;
+            //            esym->st_other = other;
+            //        }
+            //    } else {
+            //do_def:
+            //        sym_index = put_elf_sym(s, value, size,
+            //            ELFW(ST_INFO)(sym_bind, sym_type), other,
+            //            shndx, name);
+            //    }
+            return sym_index;
+
+        }
+
         public void put_elf_reloca() { }
         public void put_elf_reloc() { }
         public void squeeze_multi_relocs() { }
@@ -273,7 +534,29 @@ namespace TidePool
         public void put_stabs_r() { }
         public void put_stabn() { }
         public void put_stabd() { }
-        public void get_sym_attr() { }
+
+        public sym_attr get_sym_attr(TidePool tp, int index, int alloc)
+        {
+            //            int n;
+            //struct sym_attr *tab;
+
+            //printf("[tccelf.c] get_sym_attr \n");
+            //if (index >= s1->nb_sym_attrs) {
+            //    if (!alloc)
+            //        return s1->sym_attrs;
+            //    /* find immediately bigger power of 2 and reallocate array */
+            //    n = 1;
+            //    while (index >= n)
+            //        n *= 2;
+            //    tab = tcc_realloc(s1->sym_attrs, n * sizeof(*s1->sym_attrs));
+            //    s1->sym_attrs = tab;
+            //    memset(s1->sym_attrs + s1->nb_sym_attrs, 0,
+            //        (n - s1->nb_sym_attrs) * sizeof(*s1->sym_attrs));
+            //    s1->nb_sym_attrs = n;
+            //}
+            //return &s1->sym_attrs[index];
+            return null;
+        }
 
         /* In an ELF file symbol table, the local symbols must appear below
 the global and weak ones. Since TCC cannot sort it while generating
@@ -284,12 +567,12 @@ modified to take into account the symbol table sorting */
             int old_to_new_syms;
             //ElfW(Sym) *new_syms;
             int nb_syms;
-                int i;
+            int i;
             //ElfW(Sym) *p, *q;
             //ElfW_Rel *rel;
             Section sr;
-            int type; 
-                int sym_index;
+            int type;
+            int sym_index;
 
             //nb_syms = s->data_offset / sizeof(ElfW(Sym));
             //new_syms = tcc_malloc(nb_syms * sizeof(ElfW(Sym)));
@@ -344,7 +627,55 @@ modified to take into account the symbol table sorting */
         public void relocate_syms() { }
         public void relocate_section() { }
         public void relocate_rel() { }
-        public void prepare_dynamic_rel() { }
+
+        /* count the number of dynamic relocations so that we can reserve their space */
+        public static int prepare_dynamic_rel(TidePool tp, Section sr)
+        {
+            //Elf32_Rel rel;
+            int sym_index;
+            int type;
+            int count;
+
+            count = 0;
+            //    for_each_elem(sr, 0, rel, ElfW_Rel) {
+            //        sym_index = ELFW(R_SYM)(rel->r_info);
+            //        type = ELFW(R_TYPE)(rel->r_info);
+            //        switch(type) {
+            //#if defined(TCC_TARGET_I386)
+            //        case R_386_32:
+            //            if (!get_sym_attr(s1, sym_index, 0)->dyn_index
+            //                && ((ElfW(Sym)*)symtab_section->data + sym_index)->st_shndx == SHN_UNDEF) {
+            //                    /* don't fixup unresolved (weak) symbols */
+            //                    rel->r_info = ELFW(R_INFO)(sym_index, R_386_RELATIVE);
+            //                    break;
+            //            }
+            //#elif defined(TCC_TARGET_X86_64)
+            //        case R_X86_64_32:
+            //        case R_X86_64_32S:
+            //        case R_X86_64_64:
+            //#endif
+            //            count++;
+            //            break;
+            //#if defined(TCC_TARGET_I386)
+            //        case R_386_PC32:
+            //#elif defined(TCC_TARGET_X86_64)
+            //        case R_X86_64_PC32:
+            //#endif
+            //            if (get_sym_attr(s1, sym_index, 0)->dyn_index)
+            //                count++;
+            //            break;
+            //        default:
+            //            break;
+            //        }
+            //    }
+            //    if (count) {
+            //        /* allocate the section */
+            //        sr->sh_flags |= SHF_ALLOC;
+            //        sr->sh_size = count * sizeof(ElfW_Rel);
+            //    }
+            return count;
+        }
+
         public void build_got() { }
         public void put_got_entry() { }
         public void build_got_entries() { }
@@ -387,8 +718,233 @@ modified to take into account the symbol table sorting */
         public void bind_exe_dynsyms() { }
         public void bind_libs_dynsyms() { }
         public void export_global_syms() { }
-        public void alloc_sec_names() { }
-        public void layout_sections() { }
+
+        public static int alloc_sec_names(TidePool tp, OUTPUTTYPE file_type, Section strsec)
+        {
+            int i;
+            Section s;
+            int textrel = 0;
+
+            /* Allocate strings for section names */
+            for (i = 1; i < tp.nb_sections; i++)
+            {
+                s = tp.sections[i];
+                /* when generating a DLL, we include relocations but we may patch them */
+                if ((file_type == OUTPUTTYPE.TP_OUTPUT_DLL) && (s.sh_type == SECTIONTYPE.SHT_REL) && ((s.sh_flags & SECTIONFLAGS.SHF_ALLOC) == 0) 
+                    && ((tp.sections[s.sh_info].sh_flags & SECTIONFLAGS.SHF_ALLOC) != 0) && (prepare_dynamic_rel(tp, s) > 0))
+                {
+            //        if (s1->sections[s->sh_info]->sh_flags & SHF_EXECINSTR)
+            //            textrel = 1;
+                }
+                else if ((tp.do_debug != 0) || file_type == OUTPUTTYPE.TP_OUTPUT_OBJ || 
+                    ((s.sh_flags & SECTIONFLAGS.SHF_ALLOC) != 0) || (i == (tp.nb_sections - 1)))
+                {
+                    /* we output all sections if debug or object file */
+                    s.sh_size = s.data_offset;
+                }
+
+                if ((s.sh_size > 0) || ((s.sh_flags & SECTIONFLAGS.SHF_ALLOC) != 0))
+                    s.sh_name = strsec.put_elf_str(s.name);
+            }
+            strsec.sh_size = strsec.data_offset;
+            return textrel;
+        }
+
+        public static int layout_sections(TidePool tp, Elf32_Phdr[] phdr, int phnum, Section interp, Section strsec, dyn_inf dyninf, int[] sec_order)
+        {
+            int i;
+            int j;
+            int k;
+            OUTPUTTYPE file_type;
+            int sh_order_index;
+            int file_offset;
+            int s_align;
+            int tmp;
+            int addr;
+            Elf32_Phdr ph;
+            Section s;
+
+            file_type = tp.output_type;
+            sh_order_index = 1;
+            file_offset = 0;
+
+            if (tp.output_format == OUTPUTFORMAT.TP_OUTPUT_FORMAT_ELF)
+            {
+                file_offset = Elf32_Ehdr.EHDRSIZE + (phnum * Elf32_Phdr.PHDRSIZE);
+            }
+            s_align = Linker.ELF_PAGE_SIZE;
+            if (tp.section_align > 0)
+                s_align = tp.section_align;
+
+            if (phnum > 0)
+            {
+                if (tp.has_text_addr != 0)
+                {
+                    //            int a_offset, p_offset;
+                    //            addr = s1->text_addr;
+                    //            /* we ensure that (addr % ELF_PAGE_SIZE) == file_offset %
+                    //            ELF_PAGE_SIZE */
+                    //            a_offset = (int) (addr & (s_align - 1));
+                    //            p_offset = file_offset & (s_align - 1);
+                    //            if (a_offset < p_offset)
+                    //                a_offset += s_align;
+                    //            file_offset += (a_offset - p_offset);
+                }
+                else
+                {
+                    //            if (file_type == TCC_OUTPUT_DLL)
+                    //                addr = 0;
+                    //            else
+                    //                addr = ELF_START_ADDR;
+                    /* compute address after headers */
+                    //            addr += (file_offset & (s_align - 1));
+                }
+
+                //        ph = &phdr[0];
+                /* Leave one program headers for the program interpreter and one for
+                the program header table itself if needed. These are done later as
+                they require section layout to be done first. */
+                //        if (interp)
+                //            ph += 2;
+
+                /* dynamic relocation table information, for .dynamic section */
+                //        dyninf->rel_addr = dyninf->rel_size = 0;
+                //#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+                //        dyninf->bss_addr = dyninf->bss_size = 0;
+                //#endif
+
+                for (j = 0; j < 2; j++)
+                {
+                    //            ph->p_type = PT_LOAD;
+                    //            if (j == 0)
+                    //                ph->p_flags = PF_R | PF_X;
+                    //            else
+                    //                ph->p_flags = PF_R | PF_W;
+                    //            ph->p_align = s_align;
+
+                    /* Decide the layout of sections loaded in memory. This must
+                    be done before program headers are filled since they contain
+                    info about the layout. We do the following ordering: interp,
+                    symbol tables, relocations, progbits, nobits */
+                    /* XXX: do faster and simpler sorting */
+                    //            for(k = 0; k < 5; k++) {
+                    //                for(i = 1; i < s1->nb_sections; i++) {
+                    //                    s = s1->sections[i];
+                    //                    /* compute if section should be included */
+                    //                    if (j == 0) {
+                    //                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE)) !=
+                    //                            SHF_ALLOC)
+                    //                            continue;
+                    //                    } else {
+                    //                        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE)) !=
+                    //                            (SHF_ALLOC | SHF_WRITE))
+                    //                            continue;
+                    //                    }
+                    //                    if (s == interp) {
+                    //                        if (k != 0)
+                    //                            continue;
+                    //                    } else if (s->sh_type == SHT_DYNSYM ||
+                    //                        s->sh_type == SHT_STRTAB ||
+                    //                        s->sh_type == SHT_HASH) {
+                    //                            if (k != 1)
+                    //                                continue;
+                    //                    } else if (s->sh_type == SHT_RELX) {
+                    //                        if (k != 2)
+                    //                            continue;
+                    //                    } else if (s->sh_type == SHT_NOBITS) {
+                    //                        if (k != 4)
+                    //                            continue;
+                    //                    } else {
+                    //                        if (k != 3)
+                    //                            continue;
+                    //                    }
+                    //                    sec_order[sh_order_index++] = i;
+
+                    /* section matches: we align it and add its size */
+                    //                    tmp = addr;
+                    //                    addr = (addr + s->sh_addralign - 1) &
+                    //                        ~(s->sh_addralign - 1);
+                    //                    file_offset += (int) ( addr - tmp );
+                    //                    s->sh_offset = file_offset;
+                    //                    s->sh_addr = addr;
+
+                    /* update program header infos */
+                    //                    if (ph->p_offset == 0) {
+                    //                        ph->p_offset = file_offset;
+                    //                        ph->p_vaddr = addr;
+                    //                        ph->p_paddr = ph->p_vaddr;
+                    //                    }
+                    //                    /* update dynamic relocation infos */
+                    //                    if (s->sh_type == SHT_RELX) {
+                    //#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+                    //                        if (!strcmp(strsec->data + s->sh_name, ".rel.got")) {
+                    //                            dyninf->rel_addr = addr;
+                    //                            dyninf->rel_size += s->sh_size; /* XXX only first rel. */
+                    //                        }
+                    //                        if (!strcmp(strsec->data + s->sh_name, ".rel.bss")) {
+                    //                            dyninf->bss_addr = addr;
+                    //                            dyninf->bss_size = s->sh_size; /* XXX only first rel. */
+                    //                        }
+                    //#else
+                    //                        if (dyninf->rel_size == 0)
+                    //                            dyninf->rel_addr = addr;
+                    //                        dyninf->rel_size += s->sh_size;
+                    //#endif
+                    //                    }
+                    //                    addr += s->sh_size;
+                    //                    if (s->sh_type != SHT_NOBITS)
+                    //                        file_offset += s->sh_size;
+                    //                }
+                    //            }
+
+                    if (j == 0)
+                    {
+                        /* Make the first PT_LOAD segment include the program
+                        headers itself (and the ELF header as well), it'll
+                        come out with same memory use but will make various
+                        tools like binutils strip work better.  */
+                        //                ph->p_offset &= ~(ph->p_align - 1);
+                        //                ph->p_vaddr &= ~(ph->p_align - 1);
+                        //                ph->p_paddr &= ~(ph->p_align - 1);
+                    }
+                    //            ph->p_filesz = file_offset - ph->p_offset;
+                    //            ph->p_memsz = addr - ph->p_vaddr;
+                    //            ph++;
+                    if (j == 0)
+                    {
+                        if (tp.output_format == OUTPUTFORMAT.TP_OUTPUT_FORMAT_ELF)
+                        {
+                            /* if in the middle of a page, we duplicate the page in
+                            memory so that one copy is RX and the other is RW */
+                            //                    if ((addr & (s_align - 1)) != 0)
+                            //                        addr += s_align;
+                        }
+                        else
+                        {
+                            //                    addr = (addr + s_align - 1) & ~(s_align - 1);
+                            //                    file_offset = (file_offset + s_align - 1) & ~(s_align - 1);
+                        }
+                    }
+                }
+            }
+
+            /* all other sections come after */
+            for (i = 1; i < tp.nb_sections; i++)
+            {
+                s = tp.sections[i];
+                if (phnum > 0 && (s.sh_flags & SECTIONFLAGS.SHF_ALLOC) != 0)
+                    continue;
+                sec_order[sh_order_index++] = i;
+
+                file_offset = (file_offset + s.sh_addralign - 1) & ~(s.sh_addralign - 1);
+                s.sh_offset = file_offset;
+                if (s.sh_type != SECTIONTYPE.SHT_NOBITS)
+                    file_offset += s.sh_size;
+            }
+
+            return file_offset;
+        }
+
         public void fill_unloadable_phdr() { }
         public void fill_dynamic() { }
         public void final_sections_reloc() { }
@@ -403,8 +959,6 @@ modified to take into account the symbol table sorting */
             OUTPUTTYPE file_type;
             Section s;
             Elf32_Ehdr ehdr = new Elf32_Ehdr();
-            Elf32_Shdr shdr;
-            Elf32_Shdr sh;
 
             file_type = tp.output_type;
             shnum = (ushort)tp.nb_sections;
@@ -441,60 +995,84 @@ modified to take into account the symbol table sorting */
             ehdr.e_version = EVERSION.EV_CURRENT;
             ehdr.e_shoff = (ushort)file_offset;
             ehdr.e_ehsize = Elf32_Ehdr.EHDRSIZE;
-            ehdr.e_shentsize = Elf32_Shdr.SHDRSIZE;
+            ehdr.e_shentsize = SHDRSIZE;
             ehdr.e_shnum = shnum;
             ehdr.e_shstrndx = (ushort)(shnum - 1);
 
+            //write out obj header
+
             ehdr.writeOut(f);
+
+            //write out program hdr entries
             for (i = 0; i < phnum; i++)
             {
                 phdr[i].writeOut(f);
             }
+
             offset = Elf32_Ehdr.EHDRSIZE + (phnum * Elf32_Phdr.PHDRSIZE);
 
             //write section data
             sort_syms(tp, symtab_section);
             for (i = 1; i < tp.nb_sections; i++)
             {
-                //        s = s1->sections[sec_order[i]];
-                //        if (s->sh_type != SHT_NOBITS) {
-                //            while (offset < s->sh_offset) {
-                //                fputc(0, f);
-                //                offset++;
-                //            }
-                //            size = s->sh_size;
-                //            if (size)
-                //                fwrite(s->data, 1, size, f);
-                //            offset += size;
-                //        }
+                s = tp.sections[sec_order[i]];
+                if (s.sh_type != SECTIONTYPE.SHT_NOBITS)
+                {
+                    while (offset < s.sh_offset)
+                    {
+                        f.WriteByte(0);
+                        offset++;
+                    }
+                    size = s.sh_size;
+                    if (size != 0)
+                        f.Write(s.data, 0, size);
+                    offset += size;
+                }
             }
 
             /* output section headers */
-            //    while (offset < ehdr.e_shoff) {
-            //        fputc(0, f);
-            //        offset++;
-            //    }
+            while (offset < ehdr.e_shoff)
+            {
+                f.WriteByte(0);
+                offset++;
+            }
 
-            //    for(i = 0; i < s1->nb_sections; i++) {
-            //        sh = &shdr;
-            //        memset(sh, 0, sizeof(ElfW(Shdr)));
-            //        s = s1->sections[i];
-            //        if (s) {
-            //            sh->sh_name = s->sh_name;
-            //            sh->sh_type = s->sh_type;
-            //            sh->sh_flags = s->sh_flags;
-            //            sh->sh_entsize = s->sh_entsize;
-            //            sh->sh_info = s->sh_info;
-            //            if (s->link)
-            //                sh->sh_link = s->link->sh_num;
-            //            sh->sh_addralign = s->sh_addralign;
-            //            sh->sh_addr = s->sh_addr;
-            //            sh->sh_offset = s->sh_offset;
-            //            sh->sh_size = s->sh_size;
-            //        }
-            //        fwrite(sh, 1, sizeof(ElfW(Shdr)), f);
-            //    }
+            for (i = 0; i < tp.nb_sections; i++)
+            {
+                s = tp.sections[i];
+                if (s != null)
+                {
+                    s.writeOut(f);
+                }
+                else
+                {
+                    f.Write(EMPTYSECHDR, 0, EMPTYSECHDR.Length);
+                }
+            }
+        }
 
+        private void writeOut(FileStream f)
+        {
+            byte[] data = new byte[SHDRSIZE];
+            for (int i = 0; i < SHDRSIZE; i++)
+            {
+                data[i] = 0;
+            }
+            BitConverter.GetBytes(sh_name).CopyTo(data, 0);
+            BitConverter.GetBytes((int)sh_type).CopyTo(data, 4);
+            BitConverter.GetBytes((int)sh_flags).CopyTo(data, 8);
+            BitConverter.GetBytes(sh_addr).CopyTo(data, 12);
+            BitConverter.GetBytes(sh_offset).CopyTo(data, 16);
+            BitConverter.GetBytes(sh_size).CopyTo(data, 20);
+            if (link != null)
+            {
+                BitConverter.GetBytes(link.sh_num).CopyTo(data, 24);
+            }
+            BitConverter.GetBytes(sh_info).CopyTo(data, 28);
+            BitConverter.GetBytes(sh_addralign).CopyTo(data, 32);
+            BitConverter.GetBytes(sh_entsize).CopyTo(data, 36);
+
+            f.Write(data, 0, SHDRSIZE);
         }
 
         /* Write an elf, coff or "binary" file */
@@ -548,7 +1126,7 @@ modified to take into account the symbol table sorting */
             int file_offset = 0;
             int[] sec_order;
 
-            //    struct dyn_inf dyninf = {0};
+            dyn_inf dyninf = null;
             Elf32_Phdr[] phdr;
             Elf32_Sym sym = null;
 
@@ -569,7 +1147,7 @@ modified to take into account the symbol table sorting */
 
             if (file_type != OUTPUTTYPE.TP_OUTPUT_OBJ)
             {
-                //        /* if linking, also link in runtime libraries (libc, libgcc, etc.) */
+                /* if linking, also link in runtime libraries (libc, libgcc, etc.) */
                 //        tcc_add_runtime(s1);
                 //        resolve_common_syms(s1);
 
@@ -619,7 +1197,7 @@ modified to take into account the symbol table sorting */
             strsec.put_elf_str("");
 
             /* Allocate strings for section names */
-            //    textrel = alloc_sec_names(s1, file_type, strsec);
+            textrel = alloc_sec_names(tp, file_type, strsec);
 
             if (dynamic != null)
             {
@@ -676,7 +1254,7 @@ modified to take into account the symbol table sorting */
             sec_order[0] = 0;
 
             /* compute section to program header mapping */
-            //    file_offset = layout_sections(s1, phdr, phnum, interp, strsec, &dyninf, sec_order);
+            file_offset = layout_sections(tp, phdr, phnum, interp, strsec, dyninf, sec_order);
 
             /* Fill remaining program header and finalize relocation related to dynamic linking. */
             if (file_type != OUTPUTTYPE.TP_OUTPUT_OBJ)
@@ -754,6 +1332,15 @@ modified to take into account the symbol table sorting */
         TP_OUTPUT_FORMAT_ELF = 0,       /* default output format: ELF */
         TP_OUTPUT_FORMAT_BINARY = 1,    /* binary image output */
         TP_OUTPUT_FORMAT_COFF = 2       /* COFF */
+    }
+
+    /* extra symbol attributes (not in symbol table) */
+    public class sym_attr
+    {
+        int got_offset;
+        int plt_offset;
+        int plt_sym;
+        int dyn_index;
     }
 
     //-------------------------------------------------------------------------
@@ -947,21 +1534,21 @@ modified to take into account the symbol table sorting */
     //-------------------------------------------------------------------------
 
     /* Section header.  */
-    public class Elf32_Shdr
-    {
-        public const int SHDRSIZE = 40;
+    //public class Elf32_Shdr
+    //{
+    //    public const int SHDRSIZE = 40;
 
-        public int sh_name;		        /* Section name (string tbl index) */
-        public SECTIONTYPE sh_type;	    /* Section type */
-        public SECTIONFLAGS sh_flags;	/* Section flags */
-        public int sh_addr;		        /* Section virtual addr at execution */
-        public int sh_offset;		    /* Section file offset */
-        public int sh_size;		        /* Section size in bytes */
-        public int sh_link;		        /* Link to another section */
-        public int sh_info;		        /* Additional section information */
-        public int sh_addralign;	    /* Section alignment */
-        public int sh_entsize;		    /* Entry size if section holds table */
-    }
+    //    public int sh_name;		        /* Section name (string tbl index) */
+    //    public SECTIONTYPE sh_type;	    /* Section type */
+    //    public SECTIONFLAGS sh_flags;	/* Section flags */
+    //    public int sh_addr;		        /* Section virtual addr at execution */
+    //    public int sh_offset;		    /* Section file offset */
+    //    public int sh_size;		        /* Section size in bytes */
+    //    public int sh_link;		        /* Link to another section */
+    //    public int sh_info;		        /* Additional section information */
+    //    public int sh_addralign;	    /* Section alignment */
+    //    public int sh_entsize;		    /* Entry size if section holds table */
+    //}
 
     /* Special section indices.  */
     public enum SECTIONIDX
@@ -1049,6 +1636,8 @@ modified to take into account the symbol table sorting */
     /* Symbol table entry.  */
     public class Elf32_Sym
     {
+        public const int SYMENTSIZE = 16;
+
         public int st_name;		    /* Symbol name (string tbl index) */
         public int st_value;		/* Symbol value */
         public int st_size;		    /* Symbol size */
@@ -1128,6 +1717,21 @@ modified to take into account the symbol table sorting */
         /* Keep this the last entry.  */
         R_386_NUM = 44
     }
+
+    //-------------------------------------------------------------------------
+
+    //from tccelf.c
+
+    /* Info to be copied in dynamic section */
+    public class dyn_inf
+    {
+        Section dynamic;
+        Section dynstr;
+        int data_offset;
+        int rel_addr;
+        int rel_size;
+    };
+
 }
 
 //Console.Out.WriteLine("There's no sun in the shadow of the wizard");

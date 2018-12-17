@@ -80,7 +80,7 @@ namespace TidePool
 
 
         /* define to 1/0 to [not] have EBX as 4th register */
-        public const int USE_EBX = 1;
+        public const int USE_EBX = 0;
 
         public int[] reg_classes;
 
@@ -104,6 +104,34 @@ namespace TidePool
                     /* ebx */ (RC_INT | RC_EBX) * USE_EBX,
                     /* st0 */ RC_FLOAT | RC_ST0,
                 };
+        }
+
+        //inline funcs from tcc.h
+        public int read16le(byte[] data, int idx)
+        {
+            return data[idx] | data[idx + 1] << 8;
+        }
+
+        public void write16le(byte[] data, int idx, int x)
+        {
+            data[idx] = (byte)(x & 255);
+            data[idx + 1] = (byte)(x >> 8 & 255);
+        }
+
+        public int read32le(byte[] data, int idx)
+        {
+            return read16le(data, idx) | (int)read16le(data, idx + 2) << 16;
+        }
+
+        public void write32le(byte[] data, int idx, int x)
+        {
+            write16le(data, idx, x);
+            write16le(data, idx, x >> 16);
+        }
+
+        public void add32le(byte[] data, int idx, int x)
+        {
+            write32le(data, idx, read32le(data, idx) + x);
         }
 
         //- instruction bytes -------------------------------------------------
@@ -139,16 +167,31 @@ namespace TidePool
             g((byte)(c >> 24));
         }
 
-        public void gsym_addr() { }
-        public void gsym() { }
+        /* output a symbol and patch all calls to it */
+        public void gsym_addr(int t, int a)
+        {
+            while (t != 0)
+            {
+                int idx = t;
+                int n = read32le(Section.curTextSection.data, idx);     /* next value */
+                write32le(Section.curTextSection.data, idx, a - t - 4);
+                t = n;
+            }
+        }
+
+        public void gsym(int t)
+        {
+            gsym_addr(t, comp.ind);
+        }
+
         public void oad() { }
 
+        /* output constant with relocation if 'r & VT_SYM' is true */
         public void gen_addr32(int r, Sym sym, int c)
         {
             if ((r & Compiler.VT_SYM) != 0)
                 comp.greloc(Section.curTextSection, sym, comp.ind, I386RELOCS.R_386_32);
             gen_le32(c);
-
         }
 
         public void gen_addrpc32() { }
@@ -403,19 +446,19 @@ namespace TidePool
 
             saved_ind = comp.ind;
             comp.ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
-            //#ifdef TCC_TARGET_PE
-            //    if (v >= 4096) {
-            //        oad(0xb8, v); /* mov stacksize, %eax */
-            //        gen_static_call(TOK___chkstk); /* call __chkstk, (does the stackframe too) */
-            //    } else
-            //#endif
-            //    {
-            o(0xe58955);  /* push %ebp, mov %esp, %ebp */
-            o(0xec81);  /* sub esp, stacksize */
-            gen_le32(v);
-            o(0x90);  /* adjust to FUNC_PROLOG_SIZE */
-            //    }
-            //    o(0x53 * USE_EBX); /* push ebx */
+            if (v >= 4096)
+            {
+                //        oad(0xb8, v); /* mov stacksize, %eax */
+                //        gen_static_call(TOK___chkstk); /* call __chkstk, (does the stackframe too) */
+            }
+            else
+            {
+                o(0xe58955);  /* push %ebp, mov %esp, %ebp */
+                o(0xec81);  /* sub esp, stacksize */
+                gen_le32(v);
+                o(0x90);  /* adjust to FUNC_PROLOG_SIZE */
+            }
+            o(0x53 * USE_EBX); /* push ebx */
             comp.ind = saved_ind;
         }
 

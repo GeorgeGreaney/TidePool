@@ -2532,7 +2532,6 @@ namespace TidePool
                 //            }
                 //        }
             }
-
         }
 
         public void expr_eq()
@@ -3093,9 +3092,9 @@ namespace TidePool
             int csym = 0;
             block(ref bsym, ref csym, false);
             nocode_wanted = 0;
-            //    gsym(rsym);
-            //    gfunc_epilog();
-            //    Section.curTextSection->data_offset = ind;
+            gen.gsym(rsym);
+            gen.gfunc_epilog();
+            Section.curTextSection.data_offset = ind;
             //    label_pop(&global_label_stack, NULL, 0);
 
             /* reset local stack */

@@ -76,8 +76,9 @@ namespace TidePool
         public int warn_implicit_function_declaration;
         public int warn_gcc_compat;
 
-        //    /* compile with debug symbol (and use them if error during execution) */
-        //    int do_debug;
+            /* compile with debug symbol (and use them if error during execution) */
+        public    int do_debug;
+
         //#ifdef CONFIG_TCC_BCHECK
         //    /* compile with built-in memory and bounds checker */
         //    int do_bounds_check;
@@ -87,10 +88,10 @@ namespace TidePool
         //#endif
         //    int run_test; /* nth test to run with -dt -run */
 
-        //    addr_t text_addr; /* address of text section */
-        //    int has_text_addr;
+        public int text_addr;           /* address of text section */
+        public int has_text_addr;
 
-        //    unsigned section_align; /* section alignment */
+        public int section_align; /* section alignment */
 
         //    char *init_symbol; /* symbols to call at load-time (not used currently) */
         //    char *fini_symbol; /* symbols to call at unload-time (not used currently) */
@@ -227,7 +228,7 @@ namespace TidePool
         int option_pthread;			    /* -pthread option */
         //    int argc;
         //    char **argv;
-        
+
         public const int AFF_PRINT_ERROR = 0x10;        /* print error if file not found */
         public const int AFF_REFERENCED_DLL = 0x20;     /* load a referenced dll from another dll */
         public const int AFF_TYPE_BIN = 0x40;           /* file to add is binary */
@@ -243,7 +244,6 @@ namespace TidePool
 
         public TidePool()
         {
-            Section.initSection(this);
             prep = new Preprocessor(this);
             comp = new Compiler(this);
             gen = new Generator(this);
@@ -260,6 +260,15 @@ namespace TidePool
             verbose = 0;
 
             output_type = OUTPUTTYPE.TP_OUTPUT_NONE;
+
+            do_debug = 0;
+            section_align = 0;
+
+            sections = new List<Section>();
+            nb_sections = 0;
+            priv_sections = new List<Section>();
+            nb_priv_sections = 0;
+            Section.initSection(this);
         }
 
         public void print_dirs() { }
@@ -434,11 +443,7 @@ namespace TidePool
         public void tp_basename() { }
         public void tp_fileextension() { }
 
-        public void tp_malloc() { }
-        public void tp_mallocz() { }
         public void tp_realloc() { }
-        public void dynarray_add() { }
-        public void dynarray_reset() { }
         public void tp_split_path() { }
 
         //- messages ------------------------------------------------------------------
@@ -582,12 +587,13 @@ namespace TidePool
 
     //-------------------------------------------------------------------------
 
-    public enum FILETYPE { 
-        NONE, 
-        C, 
-        ASM, 
-        ASMPP, 
-        LIB 
+    public enum FILETYPE
+    {
+        NONE,
+        C,
+        ASM,
+        ASMPP,
+        LIB
     }
 
     public class FileSpec

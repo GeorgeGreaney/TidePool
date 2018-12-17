@@ -402,15 +402,6 @@ namespace TidePool
             tp.tp_error("{0} expected", msg);
         }
 
-        public void cstr_realloc() { }
-        public void cstr_ccat() { }
-        public void cstr_cat() { }
-        public void cstr_wccat() { }
-        public void cstr_new() { }
-        public void cstr_free() { }
-        public void cstr_reset() { }
-        public void add_char() { }
-
         //- tokens ------------------------------------------------------------
 
         /* allocate a new token */
@@ -706,6 +697,7 @@ namespace TidePool
         public void check_space() { }
         public void parse_pp_string() { }
         public void preprocess_skip() { }
+
         public void tok_str_new() { }
         public void tok_str_alloc() { }
         public void tok_str_dup() { }
@@ -713,6 +705,7 @@ namespace TidePool
         public void tok_str_free() { }
         public void tok_str_realloc() { }
         public void tok_str_add() { }
+
         public void begin_macro() { }
         public void end_macro() { }
         public void tok_str_add2() { }
@@ -1510,8 +1503,13 @@ namespace TidePool
         public void pp_need_space() { }
         public void pp_check_he0xE() { }
 
-        public void tp_preprocess()
+        public int tp_preprocess()
         {
+//                BufferedFile **iptr;
+//    int token_seen, spcs, level;
+//    const char *p;
+//    char white[400];
+
             parseFlags = PARSE_FLAG_PREPROCESS
             | (parseFlags & PARSE_FLAG_ASM_FILE)
             | PARSE_FLAG_LINEFEED
@@ -1519,13 +1517,64 @@ namespace TidePool
             | PARSE_FLAG_ACCEPT_STRAYS
             ;
 
-            pp_line(curFile, 0);
-            while (true)
-            {
-                next();
-                if (tok == (int)TPTOKEN.TOK_EOF)
-                    break;
-            }
+    /* Credits to Fabrice Bellard's initial revision to demonstrate its
+    capability to compile and run itself, provided all numbers are
+    given as decimals. tcc -E -P10 will do. */
+//    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_P10)
+//        parse_flags |= PARSE_FLAG_TOK_NUM, s1->Pflag = 1;
+
+//#ifdef PP_BENCH
+//    /* for PP benchmarks */
+//    do next(); while (tok != TOK_EOF);
+//    return 0;
+//#endif
+
+//    if (s1->dflag & 1) {
+//        pp_debug_builtins(s1);
+//        s1->dflag &= ~1;
+//    }
+
+
+//    token_seen = TOK_LINEFEED, spcs = 0;
+    for (;;) {
+//        iptr = s1->include_stack_ptr;
+        next();
+        if (tok == (int)TPTOKEN.TOK_EOF)
+            break;
+
+//        level = s1->include_stack_ptr - iptr;
+//        if (level) {
+//            if (level > 0)
+//                pp_line(s1, *iptr, 0);
+//            pp_line(s1, file, level);
+//        }
+//        if (s1->dflag & 7) {
+//            pp_debug_defines(s1);
+//            if (s1->dflag & 4)
+//                continue;
+//        }
+
+//        if (is_space(tok)) {
+//            if (spcs < sizeof white - 1)
+//                white[spcs++] = tok;
+//            continue;
+//        } else if (tok == TOK_LINEFEED) {
+//            spcs = 0;
+//            if (token_seen == TOK_LINEFEED)
+//                continue;
+//            ++file->line_ref;
+//        } else if (token_seen == TOK_LINEFEED) {
+//            pp_line(s1, file, 0);
+//        } else if (spcs == 0 && pp_need_space(token_seen, tok)) {
+//            white[spcs++] = ' ';
+//        }
+
+//        white[spcs] = 0, fputs(white, s1->ppfp), spcs = 0;
+//        fputs(p = get_tok_str(tok, &tokc), s1->ppfp);
+//        token_seen = pp_check_he0xE(tok, p);
+    }
+	return 0;
+
         }
     }
 
