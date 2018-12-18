@@ -90,6 +90,9 @@ namespace TidePool
         public static Section stab_section;
         public static Section stabstr_section;
 
+        //kludge
+        public Dictionary<int, Elf32_Sym> SymbolDict;
+
         //new_section
         public Section(TidePool tp, string _name, SECTIONTYPE _sh_type, SECTIONFLAGS _sh_flags)
         {
@@ -129,6 +132,8 @@ namespace TidePool
                 tp.sections.Add(this);
                 tp.nb_sections++;
             }
+
+            SymbolDict = new Dictionary<int, Elf32_Sym>();
         }
 
         //tccelf_new
@@ -136,7 +141,7 @@ namespace TidePool
         {
             /* no section zero */
             tp.sections.Add(null);
-            tp.nb_sections++;            
+            tp.nb_sections++;
 
             /* create standard sections */
             textSection = new Section(tp, ".text", SECTIONTYPE.SHT_PROGBITS, SECTIONFLAGS.SHF_ALLOC | SECTIONFLAGS.SHF_EXECINSTR);
@@ -252,18 +257,18 @@ namespace TidePool
 
             symtab = new Section(tp, symtab_name, sh_type, sh_flags);
             symtab.sh_entsize = Elf32_Sym.SYMENTSIZE;
+            symtab.put_elf_sym(0, 0, 0, 0, 0, null);
 
             strtab = new Section(tp, strtab_name, SECTIONTYPE.SHT_STRTAB, sh_flags);
             strtab.put_elf_str("");
             symtab.link = strtab;
-            symtab.put_elf_sym(0, 0, 0, 0, 0, null);
 
             nb_buckets = 1;
 
-            //hash = new_section(s1, hash_name, SHT_HASH, hash_sh_flags);
-            //hash->sh_entsize = sizeof(int);
-            //symtab->hash = hash;
-            //hash->link = symtab;
+            hash = new Section(tp, hash_name, SECTIONTYPE.SHT_HASH, hash_sh_flags);
+            hash.sh_entsize = sizeof(int);
+            symtab.hash = hash;
+            hash.link = symtab;
 
             //ptr = section_ptr_add(hash, (2 + nb_buckets + 1) * sizeof(int));
             //ptr[0] = nb_buckets;
@@ -349,48 +354,66 @@ namespace TidePool
         {
             int name_offset;
             int sym_index = 0;
-            //int nbuckets, h;
-            //ElfW(Sym) *sym;
-            //Section *hs;
+            int nbuckets;
+            int h;
+            Elf32_Sym sym;
+            int symidx;
+            Section hs;
 
-            //sym = section_ptr_add(s, sizeof(ElfW(Sym)));
-            //if (name && name[0])
-            //    name_offset = put_elf_str(s->link, name);
-            //else
-            //    name_offset = 0;
-            ///* XXX: endianness */
-            //sym->st_name = name_offset;
-            //sym->st_value = value;
-            //sym->st_size = size;
-            //sym->st_info = info;
-            //sym->st_other = other;
-            //sym->st_shndx = shndx;
-            //sym_index = sym - (ElfW(Sym) *)s->data;
-            //hs = s->hash;
-            //if (hs) {
-            //    int *ptr, *base;
-            //    ptr = section_ptr_add(hs, sizeof(int));
-            //    base = (int *)hs->data;
-            //    /* only add global or weak symbols. */
-            //    if (ELFW(ST_BIND)(info) != STB_LOCAL) {
-            //        /* add another hashing entry */
-            //        nbuckets = base[0];
-            //        h = elf_hash((unsigned char *)s->link->data + name_offset) % nbuckets;
-            //        *ptr = base[2 + h];
-            //        base[2 + h] = sym_index;
-            //        base[1]++;
-            //        /* we resize the hash table */
-            //        hs->nb_hashed_syms++;
-            //        if (hs->nb_hashed_syms > 2 * nbuckets) {
-            //            rebuild_hash(s, 2 * nbuckets);
-            //        }
-            //    } else {
-            //        *ptr = 0;
-            //        base[1]++;
-            //    }
-            //}
+            //tinyc makes space in the data buf for a new Elf32_Sym rec & returns the rec ofs
+            //we can't do that here, so use a List<> instead - this may cause further porting contorsions
+            symidx = section_ptr_add(Elf32_Sym.SYMENTSIZE);
+            if ((name != null) && (name[0] != 0))
+            {
+                name_offset = link.put_elf_str(name);
+            }
+            else
+            {
+                name_offset = 0;
+            }
+
+            /* XXX: endianness */
+            sym = new Elf32_Sym();
+            sym.st_name = name_offset;
+            sym.st_value = value;
+            sym.st_size = size;
+            sym.st_info = info;
+            sym.st_other = other;
+            sym.st_shndx = shndx;
+            sym_index = symidx; 
+            sym.storeData(data, symidx);
+
+            hs = hash;
+            if (hs != null)
+            {
+                //    int *ptr, *base;
+                //    ptr = section_ptr_add(hs, sizeof(int));
+                //    base = (int *)hs->data;
+
+                /* only add global or weak symbols. */
+                if ((info >> 4) != (int)STBIND.STB_LOCAL)
+                {
+                    //        /* add another hashing entry */
+                    //        nbuckets = base[0];
+                    //        h = elf_hash((unsigned char *)s->link->data + name_offset) % nbuckets;
+                    //        *ptr = base[2 + h];
+                    //        base[2 + h] = sym_index;
+                    //        base[1]++;
+                    //        /* we resize the hash table */
+                    //        hs->nb_hashed_syms++;
+                    //        if (hs->nb_hashed_syms > 2 * nbuckets) {
+                    //            rebuild_hash(s, 2 * nbuckets);
+                    //        }
+                }
+                else
+                {
+                    //        *ptr = 0;
+                    //        base[1]++;
+                }
+            }
+
+            SymbolDict.Add(sym_index, sym);
             return sym_index;
-
         }
 
         public int find_elf_sym(string name)
@@ -519,12 +542,9 @@ namespace TidePool
             //        }
             //    } else {
             //do_def:
-            //        sym_index = put_elf_sym(s, value, size,
-            //            ELFW(ST_INFO)(sym_bind, sym_type), other,
-            //            shndx, name);
+            //        sym_index = put_elf_sym(s, value, size, ELFW(ST_INFO)(sym_bind, sym_type), other, shndx, name);
             //    }
             return sym_index;
-
         }
 
         public void put_elf_reloca() { }
@@ -730,13 +750,13 @@ modified to take into account the symbol table sorting */
             {
                 s = tp.sections[i];
                 /* when generating a DLL, we include relocations but we may patch them */
-                if ((file_type == OUTPUTTYPE.TP_OUTPUT_DLL) && (s.sh_type == SECTIONTYPE.SHT_REL) && ((s.sh_flags & SECTIONFLAGS.SHF_ALLOC) == 0) 
+                if ((file_type == OUTPUTTYPE.TP_OUTPUT_DLL) && (s.sh_type == SECTIONTYPE.SHT_REL) && ((s.sh_flags & SECTIONFLAGS.SHF_ALLOC) == 0)
                     && ((tp.sections[s.sh_info].sh_flags & SECTIONFLAGS.SHF_ALLOC) != 0) && (prepare_dynamic_rel(tp, s) > 0))
                 {
-            //        if (s1->sections[s->sh_info]->sh_flags & SHF_EXECINSTR)
-            //            textrel = 1;
+                    //        if (s1->sections[s->sh_info]->sh_flags & SHF_EXECINSTR)
+                    //            textrel = 1;
                 }
-                else if ((tp.do_debug != 0) || file_type == OUTPUTTYPE.TP_OUTPUT_OBJ || 
+                else if ((tp.do_debug != 0) || file_type == OUTPUTTYPE.TP_OUTPUT_OBJ ||
                     ((s.sh_flags & SECTIONFLAGS.SHF_ALLOC) != 0) || (i == (tp.nb_sections - 1)))
                 {
                     /* we output all sections if debug or object file */
@@ -1066,7 +1086,7 @@ modified to take into account the symbol table sorting */
             BitConverter.GetBytes(sh_size).CopyTo(data, 20);
             if (link != null)
             {
-                BitConverter.GetBytes(link.sh_num).CopyTo(data, 24);
+                BitConverter.GetBytes((int)link.sh_num).CopyTo(data, 24);
             }
             BitConverter.GetBytes(sh_info).CopyTo(data, 28);
             BitConverter.GetBytes(sh_addralign).CopyTo(data, 32);
@@ -1638,13 +1658,68 @@ modified to take into account the symbol table sorting */
     {
         public const int SYMENTSIZE = 16;
 
-        public int st_name;		    /* Symbol name (string tbl index) */
-        public int st_value;		/* Symbol value */
-        public int st_size;		    /* Symbol size */
-        public char st_info;		/* Symbol type and binding */
-        public char st_other;		/* Symbol visibility */
-        public int st_shndx;		/* Section index */
+        public int st_name;		        /* Symbol name (string tbl index) */
+        public int st_value;		    /* Symbol value */
+        public int st_size;		        /* Symbol size */
+        public int st_info;		        /* Symbol type and binding */
+        public int st_other;		    /* Symbol visibility */
+        public int st_shndx;		    /* Section index */
+
+        public byte[] data;
+        public int symidx;
+
+        public void storeData(byte[] _data, int _symidx)
+        {
+            data = _data;
+            symidx = _symidx;
+            BitConverter.GetBytes(st_name).CopyTo(data, symidx);
+            BitConverter.GetBytes(st_value).CopyTo(data, symidx + 4);
+            BitConverter.GetBytes(st_size).CopyTo(data, symidx + 8);
+            BitConverter.GetBytes((byte)st_info).CopyTo(data, symidx + 12);
+            BitConverter.GetBytes((byte)st_other).CopyTo(data, symidx + 13);
+            BitConverter.GetBytes((ushort)st_shndx).CopyTo(data, symidx + 14);
+        }
+
+        internal void setSize(int size)
+        {
+            st_size = size;
+            BitConverter.GetBytes(st_size).CopyTo(data, symidx + 8);
+        }
     }
+
+    /* Legal values for ST_BIND subfield of st_info (symbol binding).  */
+    public enum STBIND
+    {
+        STB_LOCAL = 0,		/* Local symbol */
+        STB_GLOBAL = 1,	/* Global symbol */
+        STB_WEAK = 2,	/* Weak symbol */
+        STB_NUM = 3,	/* Number of defined types.  */
+        STB_LOOS = 10,	/* Start of OS-specific */
+        STB_GNU_UNIQUE = 10,		/* Unique symbol.  */
+        STB_HIOS = 12,	/* End of OS-specific */
+        STB_LOPROC = 13,	/* Start of processor-specific */
+        STB_HIPROC = 15		/* End of processor-specific */
+    }
+
+    /* Legal values for ST_TYPE subfield of st_info (symbol type).  */
+    public enum STTYPE
+    {
+        STT_NOTYPE = 0,		/* Symbol type is unspecified */
+        STT_OBJECT = 1,	/* Symbol is a data object */
+        STT_FUNC = 2,		/* Symbol is a code object */
+        STT_SECTION = 3,		/* Symbol associated with a section */
+        STT_FILE = 4,	/* Symbol's name is file name */
+        STT_COMMON = 5,	/* Symbol is a common data object */
+        STT_TLS = 6,		/* Symbol is thread-local data object*/
+        STT_NUM = 7,		/* Number of defined types.  */
+        STT_LOOS = 10,	/* Start of OS-specific */
+        STT_GNU_IFUNC = 10,	/* Symbol is indirect code object */
+        STT_HIOS = 12,	/* End of OS-specific */
+        STT_LOPROC = 13,	/* Start of processor-specific */
+        STT_HIPROC = 15,	/* End of processor-specific */
+    }
+
+    //-----------------------------------------------------------------------------
 
     /* Program segment header.  */
     public class Elf32_Phdr

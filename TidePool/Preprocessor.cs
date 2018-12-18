@@ -255,14 +255,13 @@ namespace TidePool
         public TidePool tp;
         public Compiler comp;
 
-        public int tokenFlags;
-        public int parseFlags;
-
         public BufferedFile curFile;
         public int ch;
         public int tok;
         public CValue tokc;
         public int macro_ptr;
+        public int parseFlags;
+        public int tokenFlags;
         public String tokcstr;					/* current parsed string, if any */
 
         public int total_lines;
@@ -1437,7 +1436,6 @@ namespace TidePool
         public void preprocess_start(bool isAsm)
         {
             comp = tp.comp;
-            curFile = tp.infiles[tp.infiles.Count - 1];
             total_lines = 0;
 
             //clear stacks

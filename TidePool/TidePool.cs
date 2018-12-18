@@ -76,13 +76,12 @@ namespace TidePool
         public int warn_implicit_function_declaration;
         public int warn_gcc_compat;
 
-            /* compile with debug symbol (and use them if error during execution) */
-        public    int do_debug;
+        /* compile with debug symbol (and use them if error during execution) */
+        public int do_debug;
 
-        //#ifdef CONFIG_TCC_BCHECK
-        //    /* compile with built-in memory and bounds checker */
-        //    int do_bounds_check;
-        //#endif
+        /* compile with built-in memory and bounds checker */
+        public int do_bounds_check;
+
         //#ifdef TCC_TARGET_ARM
         //    enum float_abi float_abi; /* float ABI of the generated code*/
         //#endif
@@ -478,10 +477,7 @@ namespace TidePool
             int buflen = (initlen != 0) ? initlen : IO_BUF_SIZE;
             BufferedFile bf = new BufferedFile(this, filename, initlen, buflen);
             infiles.Add(bf);
-        }
-
-        public void tp_close()
-        {
+            prep.curFile = bf;
         }
 
         public int tp_open(string filename)
@@ -499,6 +495,10 @@ namespace TidePool
             infiles[infiles.Count - 1].fs = fs;
 
             return 0;
+        }
+
+        public void tp_close()
+        {
         }
 
         public int tp_compile()

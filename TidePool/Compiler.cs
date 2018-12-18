@@ -174,11 +174,42 @@ namespace TidePool
         public void ieee_finite() { }
         public void test_lvalue() { }
         public void check_vstack() { }
-        public void tp_debug_start() { }
+
+        //---------------------------------------------------------------------
+
+        public void tp_debug_start() 
+        { 
+    if (tp.do_debug != 0) {
+//        char buf[512];
+
+//        /* file info: full path + filename */
+//        section_sym = put_elf_sym(symtab_section, 0, 0,
+//            ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
+//            text_section->sh_num, NULL);
+//        getcwd(buf, sizeof(buf));
+//#ifdef _WIN32
+//        normalize_slashes(buf);
+//#endif
+//        pstrcat(buf, sizeof(buf), "/");
+//        put_stabs_r(buf, N_SO, 0, 0,
+//            text_section->data_offset, text_section, section_sym);
+//        put_stabs_r(file->filename, N_SO, 0, 0,
+//            text_section->data_offset, text_section, section_sym);
+//        last_ind = 0;
+//        last_line_num = 0;
+    }
+
+    /* an elf symbol of type STT_FILE must be put so that STB_LOCAL symbols can be safely used */
+    int elf32StInfo = ((int)STBIND.STB_LOCAL << 4) + ((int)STTYPE.STT_FILE & 0xf);
+    Section.symtab_section.put_elf_sym(0, 0, elf32StInfo, 0, (int)SECTIONIDX.SHN_ABS, prep.curFile.filename);
+        }
+
         public void tp_debug_end() { }
         public void tp_debug_line() { }
         public void tp_debug_funcstart() { }
         public void tp_debug_funcend() { }
+
+        //---------------------------------------------------------------------
 
         public int tp_compile()
         {
@@ -213,7 +244,7 @@ namespace TidePool
             //    func_old_type.ref->f.func_call = FUNC_CDECL;
             //    func_old_type.ref->f.func_type = FUNC_OLD;
 
-            //    tcc_debug_start(s1);
+            tp_debug_start();
 
             //#ifdef INC_DEBUG
             //    printf("%s: **** new file\n", file->filename);
@@ -230,7 +261,14 @@ namespace TidePool
             return 0;
         }
 
-        public void elfsym() { }
+        public Elf32_Sym elfsym(Sym s)
+        {
+            if (s == null || s.c == 0)
+            {
+                return null;
+            }
+            return Section.symtab_section.SymbolDict[s.c];
+        }
 
         public void update_storage(Sym sym)
         {
@@ -280,83 +318,85 @@ namespace TidePool
         public void put_extern_sym2(Sym sym, int sh_num, int value, int size, int can_add_underscore)
         {
 
-//    int sym_type, sym_bind, info, other, t;
-//    ElfSym *esym;
-//    const char *name;
-//    char buf1[256];
-//#ifdef CONFIG_TCC_BCHECK
-//    char buf[32];
-//#endif
+            STTYPE sym_type;
+            STBIND sym_bind;
+            int info;
+            int other;
+            int t;
+            Elf32_Sym esym;
+            string name;
+            char[] buf1 = new char[256];
+            char[] buf = new char[32];
 
-//    if (!sym->c) {
-//        name = get_tok_str(sym->v, NULL);
-//#ifdef CONFIG_TCC_BCHECK
-//        if (tcc_state->do_bounds_check) {
-//            /* XXX: avoid doing that for statics ? */
-//            /* if bound checking is activated, we change some function
-//            names by adding the "__bound" prefix */
-//            switch(sym->v) {
-//#ifdef TCC_TARGET_PE
-//                /* XXX: we rely only on malloc hooks */
-//            case TOK_malloc:
-//            case TOK_free:
-//            case TOK_realloc:
-//            case TOK_memalign:
-//            case TOK_calloc:
-//#endif
-//            case TOK_memcpy:
-//            case TOK_memmove:
-//            case TOK_memset:
-//            case TOK_strlen:
-//            case TOK_strcpy:
-//            case TOK_alloca:
-//                strcpy(buf, "__bound_");
-//                strcat(buf, name);
-//                name = buf;
-//                break;
-//            }
-//        }
-//#endif
-//        t = sym->type.t;
-//        if ((t & VT_BTYPE) == VT_FUNC) {
-//            sym_type = STT_FUNC;
-//        } else if ((t & VT_BTYPE) == VT_VOID) {
-//            sym_type = STT_NOTYPE;
-//        } else {
-//            sym_type = STT_OBJECT;
-//        }
-//        if (t & VT_STATIC)
-//            sym_bind = STB_LOCAL;
-//        else
-//            sym_bind = STB_GLOBAL;
-//        other = 0;
-//#ifdef TCC_TARGET_PE
-//        if (sym_type == STT_FUNC && sym->type.ref) {
-//            Sym *ref = sym->type.ref;
-//            if (ref->f.func_call == FUNC_STDCALL && can_add_underscore) {
-//                sprintf(buf1, "_%s@%d", name, ref->f.func_args * PTR_SIZE);
-//                name = buf1;
-//                other |= ST_PE_STDCALL;
-//                can_add_underscore = 0;
-//            }
-//        }
-//#endif
-//        if (tcc_state->leading_underscore && can_add_underscore) {
-//            buf1[0] = '_';
-//            pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
-//            name = buf1;
-//        }
-//        if (sym->asm_label)
-//            name = get_tok_str(sym->asm_label, NULL);
-//        info = ELFW(ST_INFO)(sym_bind, sym_type);
-//        sym->c = put_elf_sym(symtab_section, value, size, info, other, sh_num, name);
-//    } else {
-//        esym = elfsym(sym);
-//        esym->st_value = value;
-//        esym->st_size = size;
-//        esym->st_shndx = sh_num;
-//    }
-//    update_storage(sym);
+            if (sym.c == 0)
+            {
+                name = prep.get_tok_str(sym.v, null);
+                        if (tp.do_bounds_check != 0) {
+                            /* XXX: avoid doing that for statics ? */
+                            /* if bound checking is activated, we change some function names by adding the "__bound" prefix */
+                //            switch(sym->v) {
+                                /* XXX: we rely only on malloc hooks */
+                //            case TOK_malloc:
+                //            case TOK_free:
+                //            case TOK_realloc:
+                //            case TOK_memalign:
+                //            case TOK_calloc:
+                //            case TOK_memcpy:
+                //            case TOK_memmove:
+                //            case TOK_memset:
+                //            case TOK_strlen:
+                //            case TOK_strcpy:
+                //            case TOK_alloca:
+                //                strcpy(buf, "__bound_");
+                //                strcat(buf, name);
+                //                name = buf;
+                //                break;
+                //            }
+                        }
+                        t = sym.type.t;
+                        if ((t & VT_BTYPE) == VT_FUNC) {
+                            sym_type = STTYPE.STT_FUNC;
+                        } else if ((t & VT_BTYPE) == VT_VOID) {
+                            sym_type = STTYPE.STT_NOTYPE;
+                        } else {
+                            sym_type = STTYPE.STT_OBJECT;
+                        }
+                        if ((t & VT_STATIC) != 0)
+                        {
+                            sym_bind = STBIND.STB_LOCAL;
+                        }
+                        else
+                        {
+                            sym_bind = STBIND.STB_GLOBAL;
+                        }
+                        other = 0;
+                //        if (sym_type == STT_FUNC && sym->type.ref) {
+                //            Sym *ref = sym->type.ref;
+                //            if (ref->f.func_call == FUNC_STDCALL && can_add_underscore) {
+                //                sprintf(buf1, "_%s@%d", name, ref->f.func_args * PTR_SIZE);
+                //                name = buf1;
+                //                other |= ST_PE_STDCALL;
+                //                can_add_underscore = 0;
+                //            }
+                //        }
+                //        if (tcc_state->leading_underscore && can_add_underscore) {
+                //            buf1[0] = '_';
+                //            pstrcpy(buf1 + 1, sizeof(buf1) - 1, name);
+                //            name = buf1;
+                //        }
+                //        if (sym->asm_label)
+                //            name = get_tok_str(sym->asm_label, NULL);
+                        info = (((int)sym_bind << 4) + ((int)sym_type & 0xf));
+                        sym.c = Section.symtab_section.put_elf_sym(value, size, info, other, sh_num, name);
+            }
+            else
+            {
+                //        esym = elfsym(sym);
+                //        esym->st_value = value;
+                //        esym->st_size = size;
+                //        esym->st_shndx = sh_num;
+            }
+            update_storage(sym);
         }
 
         public void put_extern_sym(Sym sym, Section section, int value, int size)
@@ -3102,9 +3142,10 @@ namespace TidePool
             //    sym_pop(&local_stack, NULL, 0);
 
             /* end of function */
-            /* patch symbol size */
-            //    elfsym(sym)->st_size = ind - func_ind;
             //    tcc_debug_funcend(tcc_state, ind - func_ind);
+
+            /* patch symbol size */
+            elfsym(sym).setSize(ind - func_ind);
 
             /* It's better to crash than to generate wrong code */
             Section.curTextSection = null;
