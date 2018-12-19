@@ -42,7 +42,7 @@ namespace TidePool
         public int sh_addralign;            /* elf section alignment */
         public int sh_entsize;              /* elf entry size */
         public int sh_size;                 /* section size (only used during output) */
-        public uint sh_addr;                 /* address at which the section is relocated */
+        public uint sh_addr;                /* address at which the section is relocated */
         public int sh_offset;               /* file offset */
 
         public int nb_hashed_syms;          /* used to resize the hash table */
@@ -584,34 +584,39 @@ the code, we must do it after. All the relocation tables are also
 modified to take into account the symbol table sorting */
         public static void sort_syms(TidePool tp, Section s)
         {
-            int old_to_new_syms;
-            //ElfW(Sym) *new_syms;
+            int[] old_to_new_syms;
+            Elf32_Sym[] new_syms;
             int nb_syms;
             int i;
             //ElfW(Sym) *p, *q;
+            int p;
+            int q;
             //ElfW_Rel *rel;
             Section sr;
             int type;
             int sym_index;
 
-            //nb_syms = s->data_offset / sizeof(ElfW(Sym));
-            //new_syms = tcc_malloc(nb_syms * sizeof(ElfW(Sym)));
-            //old_to_new_syms = tcc_malloc(nb_syms * sizeof(int));
+            nb_syms = s.data_offset / Elf32_Sym.SYMENTSIZE;
+            new_syms = new Elf32_Sym[nb_syms];
+            old_to_new_syms = new int[nb_syms];                
 
             /* first pass for local symbols */
             //p = (ElfW(Sym) *)s->data;
             //q = new_syms;
-            //for(i = 0; i < nb_syms; i++) {
+            p = 0;
+            q = 0;
+            for(i = 0; i < nb_syms; i++) {
             //    if (ELFW(ST_BIND)(p->st_info) == STB_LOCAL) {
             //        old_to_new_syms[i] = q - new_syms;
             //        *q++ = *p;
             //    }
             //    p++;
-            //}
+            }
 
             /* save the number of local symbols in section header */
-            //if( s->sh_size )    /* this 'if' makes IDA happy */
-            //    s->sh_info = q - new_syms;
+            if( s.sh_size > 0)             /* this 'if' makes IDA happy */
+            //s.sh_info = q;
+                s.sh_info = nb_syms - 1;        //late night kludge
 
             /* then second pass for non local symbols */
             //p = (ElfW(Sym) *)s->data;
@@ -1020,7 +1025,6 @@ modified to take into account the symbol table sorting */
             ehdr.e_shstrndx = (ushort)(shnum - 1);
 
             //write out obj header
-
             ehdr.writeOut(f);
 
             //write out program hdr entries

@@ -911,7 +911,217 @@ namespace TidePool
         public void is_null_pointer() { }
         public void is_integer_btype() { }
         public void check_comparison_pointer_types() { }
-        public void gen_op() { }
+
+        /* generic gen_op: handles types problems */
+        public void gen_op(int op)
+        {
+            int u;
+            int t1;
+            int t2;
+            int bt1;
+            int bt2;
+            int t;
+            CType type1;
+
+//redo:
+            t1 = vstack[vtop - 1].type.t;
+            t2 = vstack[vtop].type.t;
+            bt1 = t1 & VT_BTYPE;
+            bt2 = t2 & VT_BTYPE;
+
+//    if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
+//        tcc_error("operation on a struct");
+//    } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
+//        if (bt2 == VT_FUNC) {
+//            mk_pointer(&vtop->type);
+//            gaddrof();
+//        }
+//        if (bt1 == VT_FUNC) {
+//            vswap();
+//            mk_pointer(&vtop->type);
+//            gaddrof();
+//            vswap();
+//        }
+//        goto redo;
+//    } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
+//        /* at least one operand is a pointer */
+//        /* relational op: must be both pointers */
+//        if (op >= TOK_ULT && op <= TOK_LOR) {
+//            check_comparison_pointer_types(vtop - 1, vtop, op);
+//            /* pointers are handled are unsigned */
+//#if PTR_SIZE == 8
+//            t = VT_LLONG | VT_UNSIGNED;
+//#else
+//            t = VT_INT | VT_UNSIGNED;
+//#endif
+//            goto std_op;
+//        }
+//        /* if both pointers, then it must be the '-' op */
+//        if (bt1 == VT_PTR && bt2 == VT_PTR) {
+//            if (op != '-')
+//                tcc_error("cannot use pointers here");
+//            check_comparison_pointer_types(vtop - 1, vtop, op);
+//            /* XXX: check that types are compatible */
+//            if (vtop[-1].type.t & VT_VLA) {
+//                vla_runtime_pointed_size(&vtop[-1].type);
+//            } else {
+//                vpushi(pointed_size(&vtop[-1].type));
+//            }
+//            vrott(3);
+//            gen_opic(op);
+//            vtop->type.t = ptrdiff_type.t;
+//            vswap();
+//            gen_op(TOK_PDIV);
+//        } else {
+//            /* exactly one pointer : must be '+' or '-'. */
+//            if (op != '-' && op != '+')
+//                tcc_error("cannot use pointers here");
+//            /* Put pointer as first operand */
+//            if (bt2 == VT_PTR) {
+//                vswap();
+//                t = t1, t1 = t2, t2 = t;
+//            }
+//#if PTR_SIZE == 4
+//            if ((vtop[0].type.t & VT_BTYPE) == VT_LLONG)
+//                /* XXX: truncate here because gen_opl can't handle ptr + long long */
+//                gen_cast_s(VT_INT);
+//#endif
+//            type1 = vtop[-1].type;
+//            type1.t &= ~VT_ARRAY;
+//            if (vtop[-1].type.t & VT_VLA)
+//                vla_runtime_pointed_size(&vtop[-1].type);
+//            else {
+//                u = pointed_size(&vtop[-1].type);
+//                if (u < 0)
+//                    tcc_error("unknown array element size");
+//#if PTR_SIZE == 8
+//                vpushll(u);
+//#else
+//                /* XXX: cast to int ? (long long case) */
+//                vpushi(u);
+//#endif
+//            }
+//            gen_op('*');
+//#if 0
+//            * #ifdef CONFIG_TCC_BCHECK
+//                The main reason to removing this code:
+//#include <stdio.h>
+//            int main ()
+//            {
+//                int v[10];
+//                int i = 10;
+//                int j = 9;
+//                fprintf(stderr, "v+i-j  = %p\n", v+i-j);
+//                fprintf(stderr, "v+(i-j)  = %p\n", v+(i-j));
+//            }
+//            When this code is on. then the output looks like 
+//                v+i-j = 0xfffffffe
+//                v+(i-j) = 0xbff84000
+//                */
+//                /* if evaluating constant expression, no code should be
+//                generated, so no bound check */
+//                if (tcc_state->do_bounds_check && !const_wanted) {
+//                    /* if bounded pointers, we generate a special code to
+//                    test bounds */
+//                    if (op == '-') {
+//                        vpushi(0);
+//                        vswap();
+//                        gen_op('-');
+//                    }
+//                    gen_bounded_ptr_add();
+//                } else
+//#endif
+//                {
+//                    gen_opic(op);
+//                }
+//                /* put again type if gen_opic() swaped operands */
+//                vtop->type = type1;
+//        }
+//    } else if (is_float(bt1) || is_float(bt2)) {
+//        /* compute bigger type and do implicit casts */
+//        if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
+//            t = VT_LDOUBLE;
+//        } else if (bt1 == VT_DOUBLE || bt2 == VT_DOUBLE) {
+//            t = VT_DOUBLE;
+//        } else {
+//            t = VT_FLOAT;
+//        }
+//        /* floats can only be used for a few operations */
+//        if (op != '+' && op != '-' && op != '*' && op != '/' &&
+//            (op < TOK_ULT || op > TOK_GT))
+//            tcc_error("invalid operands for binary operation");
+//        goto std_op;
+//    } else if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL) {
+//        t = bt1 == VT_LLONG ? VT_LLONG : VT_INT;
+//        if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (t | VT_UNSIGNED))
+//            t |= VT_UNSIGNED;
+//        t |= (VT_LONG & t1);
+//        goto std_op;
+//    } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
+//        /* cast to biggest op */
+//        t = VT_LLONG | VT_LONG;
+//        if (bt1 == VT_LLONG)
+//            t &= t1;
+//        if (bt2 == VT_LLONG)
+//            t &= t2;
+//        /* convert to unsigned if it does not fit in a long long */
+//        if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED) ||
+//            (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED))
+//            t |= VT_UNSIGNED;
+//        goto std_op;
+//    } else {
+//        /* integer operations */
+//        t = VT_INT | (VT_LONG & (t1 | t2));
+//        /* convert to unsigned if it does not fit in an integer */
+//        if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED) ||
+//            (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED))
+//            t |= VT_UNSIGNED;
+//std_op:
+//        /* XXX: currently, some unsigned operations are explicit, so
+//        we modify them here */
+//        if (t & VT_UNSIGNED) {
+//            if (op == TOK_SAR)
+//                op = TOK_SHR;
+//            else if (op == '/')
+//                op = TOK_UDIV;
+//            else if (op == '%')
+//                op = TOK_UMOD;
+//            else if (op == TOK_LT)
+//                op = TOK_ULT;
+//            else if (op == TOK_GT)
+//                op = TOK_UGT;
+//            else if (op == TOK_LE)
+//                op = TOK_ULE;
+//            else if (op == TOK_GE)
+//                op = TOK_UGE;
+//        }
+//        vswap();
+//        type1.t = t;
+//        type1.ref = NULL;
+//        gen_cast(&type1);
+//        vswap();
+//        /* special case for shifts and long long: we keep the shift as
+//        an integer */
+//        if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL)
+//            type1.t = VT_INT;
+//        gen_cast(&type1);
+//        if (is_float(t))
+//            gen_opif(op);
+//        else
+//            gen_opic(op);
+//        if (op >= TOK_ULT && op <= TOK_GT) {
+//            /* relational op: the result is an int */
+//            vtop->type.t = VT_INT;
+//        } else {
+//            vtop->type.t = t;
+//        }
+//    }
+
+    // Make sure that we have converted to an rvalue:
+//    if (vtop->r & VT_LVAL)
+//        gv(is_float(vtop->type.t & VT_BTYPE) ? RC_FLOAT : RC_INT);
+        }
+
         public void gen_cvt_itof1() { }
         public void gen_cvt_ftoi1() { }
         public void force_charshort_cast() { }
@@ -2196,13 +2406,13 @@ namespace TidePool
             int t;
 
             expr_prod();
-            //while (tok == '+' || tok == '-')
-            //{
-            //    t = tok;
-            //    next();
-            //    expr_prod();
-            //    gen_op(t);
-            //}
+            while (prep.tok == '+' || prep.tok == '-')
+            {
+                t = prep.tok;
+                prep.next();
+                expr_prod();
+                gen_op(t);
+            }
         }
 
         public void expr_shift()

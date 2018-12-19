@@ -274,7 +274,11 @@ namespace TidePool
         public void print_search_dirs() { }
         public void set_environment() { }
         public void default_outputfile() { }
-        public void getclock_ms() { }
+
+        public int getclock_ms() 
+        {
+            return Environment.TickCount;
+        }
 
         //tcc's main
         public int compile(string[] args)
@@ -283,7 +287,7 @@ namespace TidePool
             Options.RETCODE opt;
             int n = 0;
             int t = 0;
-            //    unsigned start_time = 0;
+            int start_time = 0;
             //    const char *first_file;
             //    int argc; char **argv;
             //    FILE *ppfp = stdout;
@@ -350,8 +354,8 @@ namespace TidePool
             //                tcc_set_options(s, "-lpthread");
             //        }
 
-            //        if (s->do_bench)
-            //            start_time = getclock_ms();			//get start time
+                    if (do_bench != 0)
+                        start_time = getclock_ms();			//get start time
             //    }
 
             //    set_environment(s);
