@@ -63,20 +63,23 @@ namespace TidePool
         TOK_LINENUM = 0xc0,         /* line number info */
         TOK_TWODOTS = 0xa8,         /* C++ token ? */
 
-        TOK_UMULL = 0xc2, /* unsigned 32x32 -> 64 mul */
-        TOK_ADDC1 = 0xc3, /* add with carry generation */
-        TOK_ADDC2 = 0xc4, /* add with carry use */
-        TOK_SUBC1 = 0xc5, /* add with carry generation */
-        TOK_SUBC2 = 0xc6, /* add with carry use */
+        TOK_UMULL = 0xc2,           /* unsigned 32x32 -> 64 mul */
+        TOK_ADDC1 = 0xc3,           /* add with carry generation */
+        TOK_ADDC2 = 0xc4,           /* add with carry use */
+        TOK_SUBC1 = 0xc5,           /* add with carry generation */
+        TOK_SUBC2 = 0xc6,           /* add with carry use */
         TOK_ARROW = 0xc7,
-        TOK_DOTS = 0xc8, /* three dots */
-        TOK_SHR = 0xc9, /* unsigned shift right */
-        TOK_TWOSHARPS = 0xca, /* ## preprocessing token */
-        TOK_PLCHLDR = 0xcb, /* placeholder token as defined in C99 */
-        TOK_NOSUBST = 0xcc, /* means following token has already been pp'd */
-        TOK_PPJOIN = 0xcd, /* A '##' in the right position to mean pasting */
-        TOK_CLONG = 0xce, /* long constant */
-        TOK_CULONG = 0xcf, /* unsigned long constant */
+        TOK_DOTS = 0xc8,            /* three dots */
+        TOK_SHR = 0xc9,             /* unsigned shift right */
+        TOK_TWOSHARPS = 0xca,       /* ## preprocessing token */
+        TOK_PLCHLDR = 0xcb,         /* placeholder token as defined in C99 */
+        TOK_NOSUBST = 0xcc,         /* means following token has already been pp'd */
+        TOK_PPJOIN = 0xcd,          /* A '##' in the right position to mean pasting */
+        TOK_CLONG = 0xce,           /* long constant */
+        TOK_CULONG = 0xcf,          /* unsigned long constant */
+
+        TOK_SHL = 0x01,             /* shift left */
+        TOK_SAR = 0x02,             /* signed shift right */
 
         /* assignment operators : normal operator or 0x80 */
         TOK_A_MOD = 0xa5,
@@ -288,9 +291,9 @@ namespace TidePool
         public List<TokenSym>[] hash_ident;			            //symbol tbl
         public string token_buf;
 
-//static CString cstr_buf;							//for token spelling
-//static CString macro_equal_buf;
-//static TokenString tokstr_buf;							//for defines
+        //static CString cstr_buf;							//for token spelling
+        //static CString macro_equal_buf;
+        //static TokenString tokstr_buf;							//for defines
 
         public int[] isidnum_table;
 
@@ -396,7 +399,7 @@ namespace TidePool
             next();
         }
 
-        public void expect(string msg) 
+        public void expect(string msg)
         {
             tp.tp_error("{0} expected", msg);
         }
@@ -1095,46 +1098,55 @@ namespace TidePool
                         goto parse_simple;
                     if (c != BufferedFile.CH_EOF)
                         goto redo_no_start;
-                            {
-                    //            TCCState *s1 = tcc_state;
-                                if (((parseFlags & PARSE_FLAG_LINEFEED) != 0) && !((tokenFlags & TOK_FLAG_EOF) != 0)) {
-                                    tokenFlags |= TOK_FLAG_EOF;
-                                    tok = (int)TPTOKEN.TOK_LINEFEED;
-                                    goto keep_tok_flags;
-                                } else if (!((parseFlags & PARSE_FLAG_PREPROCESS) != 0)) {
-                                    tok = (int)TPTOKEN.TOK_EOF;
-                                } else if (tp.ifdef_stack_ptr != 0) {
-                                    tp.tp_error("missing #endif");
-                                } else if (tp.include_stack_ptr == 0) {
-                                    /* no include left : end of file. */
-                                    tok = (int)TPTOKEN.TOK_EOF;
-                                } else {
-                                    tokenFlags &= ~TOK_FLAG_EOF;
-                                    /* pop include file */
+                    {
+                        //            TCCState *s1 = tcc_state;
+                        if (((parseFlags & PARSE_FLAG_LINEFEED) != 0) && !((tokenFlags & TOK_FLAG_EOF) != 0))
+                        {
+                            tokenFlags |= TOK_FLAG_EOF;
+                            tok = (int)TPTOKEN.TOK_LINEFEED;
+                            goto keep_tok_flags;
+                        }
+                        else if (!((parseFlags & PARSE_FLAG_PREPROCESS) != 0))
+                        {
+                            tok = (int)TPTOKEN.TOK_EOF;
+                        }
+                        else if (tp.ifdef_stack_ptr != 0)
+                        {
+                            tp.tp_error("missing #endif");
+                        }
+                        else if (tp.include_stack_ptr == 0)
+                        {
+                            /* no include left : end of file. */
+                            tok = (int)TPTOKEN.TOK_EOF;
+                        }
+                        else
+                        {
+                            tokenFlags &= ~TOK_FLAG_EOF;
+                            /* pop include file */
 
-                                    /* test if previous '#endif' was after a #ifdef at start of file */
-                    //                if (tok_flags & TOK_FLAG_ENDIF) {
-                    //#ifdef INC_DEBUG
-                    //                    printf("#endif %s\n", get_tok_str(file->ifndef_macro_saved, NULL));
-                    //#endif
-                    //                    search_cached_include(s1, file->filename, 1)
-                    //                        ->ifndef_macro = file->ifndef_macro_saved;
-                    //                    tok_flags &= ~TOK_FLAG_ENDIF;
-                    //                }
+                            /* test if previous '#endif' was after a #ifdef at start of file */
+                            //                if (tok_flags & TOK_FLAG_ENDIF) {
+                            //#ifdef INC_DEBUG
+                            //                    printf("#endif %s\n", get_tok_str(file->ifndef_macro_saved, NULL));
+                            //#endif
+                            //                    search_cached_include(s1, file->filename, 1)
+                            //                        ->ifndef_macro = file->ifndef_macro_saved;
+                            //                    tok_flags &= ~TOK_FLAG_ENDIF;
+                            //                }
 
-                    //                /* add end of include file debug info */
-                    //                if (tcc_state->do_debug) {
-                    //                    put_stabd(N_EINCL, 0, 0);
-                    //                }
-                    //                /* pop include stack */
-                    //                tcc_close();
-                    //                s1->include_stack_ptr--;
-                    //                p = file->buf_ptr;
-                    //                if (p == file->buffer)
-                    //                    tok_flags = TOK_FLAG_BOF|TOK_FLAG_BOL;
-                                    goto redo_no_start;
-                                }
-                            }
+                            //                /* add end of include file debug info */
+                            //                if (tcc_state->do_debug) {
+                            //                    put_stabd(N_EINCL, 0, 0);
+                            //                }
+                            //                /* pop include stack */
+                            //                tcc_close();
+                            //                s1->include_stack_ptr--;
+                            //                p = file->buf_ptr;
+                            //                if (p == file->buffer)
+                            //                    tok_flags = TOK_FLAG_BOF|TOK_FLAG_BOL;
+                            goto redo_no_start;
+                        }
+                    }
                     break;
 
                 case '\n':
@@ -1260,7 +1272,7 @@ namespace TidePool
 
                 case 'L':
 
-//digits
+                //digits
                 case '0':
                 case '1':
                 case '2':
@@ -1367,7 +1379,7 @@ namespace TidePool
             }
         }
 
-        public void next_nomacro() 
+        public void next_nomacro()
         {
             do
             {
@@ -1419,8 +1431,8 @@ namespace TidePool
             /* convert preprocessor tokens into C tokens */
             if (tok == (int)TPTOKEN.TOK_PPNUM)
             {
-                        if  ((parseFlags & PARSE_FLAG_TOK_NUM) != 0)
-                            parse_number(tokc.str);
+                if ((parseFlags & PARSE_FLAG_TOK_NUM) != 0)
+                    parse_number(tokc.str);
             }
             else if (tok == (int)TPTOKEN.TOK_PPSTR)
             {
@@ -1468,7 +1480,7 @@ namespace TidePool
             //    cstr_cat(&cstr, s1->cmd_include_files[i], -1);
             //    cstr_cat(&cstr, "\"\n", -1);
             //}
-            
+
             //if (cstr.size)
             //{
             //    *s1->include_stack_ptr++ = file;
@@ -1503,10 +1515,10 @@ namespace TidePool
 
         public int tp_preprocess()
         {
-//                BufferedFile **iptr;
-//    int token_seen, spcs, level;
-//    const char *p;
-//    char white[400];
+            //                BufferedFile **iptr;
+            //    int token_seen, spcs, level;
+            //    const char *p;
+            //    char white[400];
 
             parseFlags = PARSE_FLAG_PREPROCESS
             | (parseFlags & PARSE_FLAG_ASM_FILE)
@@ -1515,63 +1527,64 @@ namespace TidePool
             | PARSE_FLAG_ACCEPT_STRAYS
             ;
 
-    /* Credits to Fabrice Bellard's initial revision to demonstrate its
-    capability to compile and run itself, provided all numbers are
-    given as decimals. tcc -E -P10 will do. */
-//    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_P10)
-//        parse_flags |= PARSE_FLAG_TOK_NUM, s1->Pflag = 1;
+            /* Credits to Fabrice Bellard's initial revision to demonstrate its
+            capability to compile and run itself, provided all numbers are
+            given as decimals. tcc -E -P10 will do. */
+            //    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_P10)
+            //        parse_flags |= PARSE_FLAG_TOK_NUM, s1->Pflag = 1;
 
-//#ifdef PP_BENCH
-//    /* for PP benchmarks */
-//    do next(); while (tok != TOK_EOF);
-//    return 0;
-//#endif
+            //#ifdef PP_BENCH
+            //    /* for PP benchmarks */
+            //    do next(); while (tok != TOK_EOF);
+            //    return 0;
+            //#endif
 
-//    if (s1->dflag & 1) {
-//        pp_debug_builtins(s1);
-//        s1->dflag &= ~1;
-//    }
+            //    if (s1->dflag & 1) {
+            //        pp_debug_builtins(s1);
+            //        s1->dflag &= ~1;
+            //    }
 
 
-//    token_seen = TOK_LINEFEED, spcs = 0;
-    for (;;) {
-//        iptr = s1->include_stack_ptr;
-        next();
-        if (tok == (int)TPTOKEN.TOK_EOF)
-            break;
+            //    token_seen = TOK_LINEFEED, spcs = 0;
+            for (; ; )
+            {
+                //        iptr = s1->include_stack_ptr;
+                next();
+                if (tok == (int)TPTOKEN.TOK_EOF)
+                    break;
 
-//        level = s1->include_stack_ptr - iptr;
-//        if (level) {
-//            if (level > 0)
-//                pp_line(s1, *iptr, 0);
-//            pp_line(s1, file, level);
-//        }
-//        if (s1->dflag & 7) {
-//            pp_debug_defines(s1);
-//            if (s1->dflag & 4)
-//                continue;
-//        }
+                //        level = s1->include_stack_ptr - iptr;
+                //        if (level) {
+                //            if (level > 0)
+                //                pp_line(s1, *iptr, 0);
+                //            pp_line(s1, file, level);
+                //        }
+                //        if (s1->dflag & 7) {
+                //            pp_debug_defines(s1);
+                //            if (s1->dflag & 4)
+                //                continue;
+                //        }
 
-//        if (is_space(tok)) {
-//            if (spcs < sizeof white - 1)
-//                white[spcs++] = tok;
-//            continue;
-//        } else if (tok == TOK_LINEFEED) {
-//            spcs = 0;
-//            if (token_seen == TOK_LINEFEED)
-//                continue;
-//            ++file->line_ref;
-//        } else if (token_seen == TOK_LINEFEED) {
-//            pp_line(s1, file, 0);
-//        } else if (spcs == 0 && pp_need_space(token_seen, tok)) {
-//            white[spcs++] = ' ';
-//        }
+                //        if (is_space(tok)) {
+                //            if (spcs < sizeof white - 1)
+                //                white[spcs++] = tok;
+                //            continue;
+                //        } else if (tok == TOK_LINEFEED) {
+                //            spcs = 0;
+                //            if (token_seen == TOK_LINEFEED)
+                //                continue;
+                //            ++file->line_ref;
+                //        } else if (token_seen == TOK_LINEFEED) {
+                //            pp_line(s1, file, 0);
+                //        } else if (spcs == 0 && pp_need_space(token_seen, tok)) {
+                //            white[spcs++] = ' ';
+                //        }
 
-//        white[spcs] = 0, fputs(white, s1->ppfp), spcs = 0;
-//        fputs(p = get_tok_str(tok, &tokc), s1->ppfp);
-//        token_seen = pp_check_he0xE(tok, p);
-    }
-	return 0;
+                //        white[spcs] = 0, fputs(white, s1->ppfp), spcs = 0;
+                //        fputs(p = get_tok_str(tok, &tokc), s1->ppfp);
+                //        token_seen = pp_check_he0xE(tok, p);
+            }
+            return 0;
 
         }
     }
@@ -1647,6 +1660,7 @@ namespace TidePool
 
     //-------------------------------------------------------------------------
 
+    //constant value
     public class CValue
     {
         public double ld;       //double & long double are the same in VC++ - 8 bytes
@@ -1655,6 +1669,16 @@ namespace TidePool
         public ulong i;         //8 bytes
         public string str;
         public int[] tab;
+
+        public CValue(CValue that)
+        {
+            this.ld = that.ld;
+            this.d = that.d;
+            this.f = that.f;
+            this.i = that.i;
+            this.str = String.Copy(that.str);
+            this.tab = (int[])that.tab.Clone();
+        }
     }
 }
 

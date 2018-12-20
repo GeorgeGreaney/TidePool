@@ -547,12 +547,27 @@ namespace TidePool
             sval.type = type;
             sval.r = r;
             sval.r2 = VT_CONST;
-            sval.c = vc;
+            sval.c = new CValue(vc);
             sval.sym = null;
             vstack[++vtop] = sval;
         }
 
-        public void vswap() { }
+        public void vswap() 
+        {
+            SValue tmp;
+            /* cannot vswap cpu flags. See comment at vsetc() above */
+            //if (vtop >= vstack && !nocode_wanted)
+            //{
+            //    int v = vtop->r & VT_VALMASK;
+            //    if (v == VT_CMP || (v & ~1) == VT_JMP)
+            //        gv(RC_INT);
+            //}
+
+            tmp = vstack[vtop];
+            vstack[vtop] = vstack[vtop - 1];
+            vstack[vtop - 1] = tmp;
+        }
+
         public void vpop() { }
         public void vpush() { }
         public void vpushi() { }
@@ -904,7 +919,197 @@ namespace TidePool
         public void gen_opl() { }
         public void gen_opic_sdiv() { }
         public void gen_opic_lt() { }
-        public void gen_opic() { }
+
+        /* handle integer constant optimizations and various machine independent opt */
+        public void gen_opic(int op)
+        {
+            SValue v1 = vstack[vtop - 1];
+            SValue v2 = vstack[vtop];
+            int t1 = v1.type.t & VT_BTYPE;
+            int t2 = v2.type.t & VT_BTYPE;
+            bool c1 = (v1.r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+            bool c2 = (v2.r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+            ulong l1 = c1 ? v1.c.i : 0;
+            ulong l2 = c2 ? v2.c.i : 0;
+            int shm = (t1 == VT_LLONG) ? 63 : 31;
+
+            //if (t1 != VT_LLONG && (PTR_SIZE != 8 || t1 != VT_PTR))
+            //    l1 = ((uint32_t)l1 |
+            //    (v1->type.t & VT_UNSIGNED ? 0 : -(l1 & 0x80000000)));
+            //if (t2 != VT_LLONG && (PTR_SIZE != 8 || t2 != VT_PTR))
+            //    l2 = ((uint32_t)l2 |
+            //    (v2->type.t & VT_UNSIGNED ? 0 : -(l2 & 0x80000000)));
+
+            if (c1 && c2)
+            {
+                switch (op)
+                {
+                    case '+':
+                        l1 += l2;
+                        break;
+
+                    case '-': 
+                        l1 -= l2; 
+                        break;
+
+                    case '&': 
+                        l1 &= l2; 
+                        break;
+
+                    case '^': 
+                        l1 ^= l2; 
+                        break;
+
+                    case '|': 
+                        l1 |= l2; 
+                        break;
+
+                    case '*': 
+                        l1 *= l2; 
+                        break;
+
+            //        case TOK_PDIV:
+            //        case '/':
+            //        case '%':
+            //        case TOK_UDIV:
+            //        case TOK_UMOD:
+            //            /* if division by zero, generate explicit division */
+            //            if (l2 == 0)
+            //            {
+            //                if (const_wanted)
+            //                    tcc_error("division by zero in constant");
+            //                goto general_case;
+            //            }
+            //            switch (op)
+            //            {
+            //                default: l1 = gen_opic_sdiv(l1, l2); break;
+            //                case '%': l1 = l1 - l2 * gen_opic_sdiv(l1, l2); break;
+            //                case TOK_UDIV: l1 = l1 / l2; break;
+            //                case TOK_UMOD: l1 = l1 % l2; break;
+            //            }
+            //            break;
+            //        case TOK_SHL: l1 <<= (l2 & shm); break;
+            //        case TOK_SHR: l1 >>= (l2 & shm); break;
+            //        case TOK_SAR:
+            //            l1 = (l1 >> 63) ? ~(~l1 >> (l2 & shm)) : l1 >> (l2 & shm);
+            //            break;
+
+            //        /* tests */
+            //        case TOK_ULT: l1 = l1 < l2; break;
+            //        case TOK_UGE: l1 = l1 >= l2; break;
+            //        case TOK_EQ: l1 = l1 == l2; break;
+            //        case TOK_NE: l1 = l1 != l2; break;
+            //        case TOK_ULE: l1 = l1 <= l2; break;
+            //        case TOK_UGT: l1 = l1 > l2; break;
+            //        case TOK_LT: l1 = gen_opic_lt(l1, l2); break;
+            //        case TOK_GE: l1 = !gen_opic_lt(l1, l2); break;
+            //        case TOK_LE: l1 = !gen_opic_lt(l2, l1); break;
+            //        case TOK_GT: l1 = gen_opic_lt(l2, l1); break;
+
+            //        /* logical */
+            //        case TOK_LAND: l1 = l1 && l2; break;
+            //        case TOK_LOR: l1 = l1 || l2; break;
+            //        default:
+            //            goto general_case;
+                }
+
+            //    if (t1 != VT_LLONG && (PTR_SIZE != 8 || t1 != VT_PTR))
+            //        l1 = ((uint32_t)l1 |
+            //        (v1->type.t & VT_UNSIGNED ? 0 : -(l1 & 0x80000000)));
+            //    v1->c.i = l1;
+            //    vtop--;
+            }
+            else
+            {
+            //    /* if commutative ops, put c2 as constant */
+            //    if (c1 && (op == '+' || op == '&' || op == '^' ||
+            //        op == '|' || op == '*'))
+            //    {
+            //        vswap();
+            //        c2 = c1; //c = c1, c1 = c2, c2 = c;
+            //        l2 = l1; //l = l1, l1 = l2, l2 = l;
+            //    }
+            //    if (!const_wanted &&
+            //        c1 && ((l1 == 0 &&
+            //        (op == TOK_SHL || op == TOK_SHR || op == TOK_SAR)) ||
+            //        (l1 == -1 && op == TOK_SAR)))
+            //    {
+            //        /* treat (0 << x), (0 >> x) and (-1 >> x) as constant */
+            //        vtop--;
+            //    }
+            //    else if (!const_wanted &&
+            //      c2 && ((l2 == 0 && (op == '&' || op == '*')) ||
+            //      (op == '|' &&
+            //      (l2 == -1 || (l2 == 0xFFFFFFFF && t2 != VT_LLONG))) ||
+            //      (l2 == 1 && (op == '%' || op == TOK_UMOD))))
+            //    {
+            //        /* treat (x & 0), (x * 0), (x | -1) and (x % 1) as constant */
+            //        if (l2 == 1)
+            //            vtop->c.i = 0;
+            //        vswap();
+            //        vtop--;
+            //    }
+            //    else if (c2 && (((op == '*' || op == '/' || op == TOK_UDIV ||
+            //      op == TOK_PDIV) &&
+            //      l2 == 1) ||
+            //      ((op == '+' || op == '-' || op == '|' || op == '^' ||
+            //      op == TOK_SHL || op == TOK_SHR || op == TOK_SAR) &&
+            //      l2 == 0) ||
+            //      (op == '&' &&
+            //      (l2 == -1 || (l2 == 0xFFFFFFFF && t2 != VT_LLONG)))))
+            //    {
+            //        /* filter out NOP operations like x*1, x-0, x&-1... */
+            //        vtop--;
+            //    }
+            //    else if (c2 && (op == '*' || op == TOK_PDIV || op == TOK_UDIV))
+            //    {
+            //        /* try to use shifts instead of muls or divs */
+            //        if (l2 > 0 && (l2 & (l2 - 1)) == 0)
+            //        {
+            //            int n = -1;
+            //            while (l2)
+            //            {
+            //                l2 >>= 1;
+            //                n++;
+            //            }
+            //            vtop->c.i = n;
+            //            if (op == '*')
+            //                op = TOK_SHL;
+            //            else if (op == TOK_PDIV)
+            //                op = TOK_SAR;
+            //            else
+            //                op = TOK_SHR;
+            //        }
+            //        goto general_case;
+            //    }
+            //    else if (c2 && (op == '+' || op == '-') &&
+            //      (((vtop[-1].r & (VT_VALMASK | VT_LVAL | VT_SYM)) == (VT_CONST | VT_SYM))
+            //      || (vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_LOCAL))
+            //    {
+            //        /* symbol + constant case */
+            //        if (op == '-')
+            //            l2 = -l2;
+            //        l2 += vtop[-1].c.i;
+            //        /* The backends can't always deal with addends to symbols
+            //        larger than +-1<<31.  Don't construct such.  */
+            //        if ((int)l2 != l2)
+            //            goto general_case;
+            //        vtop--;
+            //        vtop->c.i = l2;
+            //    }
+            //    else
+            //    {
+            //    general_case:
+            //        /* call low level op generator */
+            //        if (t1 == VT_LLONG || t2 == VT_LLONG ||
+            //            (PTR_SIZE == 8 && (t1 == VT_PTR || t2 == VT_PTR)))
+            //            gen_opl(op);
+            //        else
+            //            gen_opi(op);
+            //    }
+            }
+        }
+
         public void gen_opif() { }
         public void pointed_size() { }
         public void vla_runtime_pointed_size() { }
@@ -921,7 +1126,7 @@ namespace TidePool
             int bt1;
             int bt2;
             int t;
-            CType type1;
+            CType type1 = new CType();
 
 //redo:
             t1 = vstack[vtop - 1].type.t;
@@ -929,9 +1134,9 @@ namespace TidePool
             bt1 = t1 & VT_BTYPE;
             bt2 = t2 & VT_BTYPE;
 
-//    if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
+    if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
 //        tcc_error("operation on a struct");
-//    } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
+    } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
 //        if (bt2 == VT_FUNC) {
 //            mk_pointer(&vtop->type);
 //            gaddrof();
@@ -943,7 +1148,7 @@ namespace TidePool
 //            vswap();
 //        }
 //        goto redo;
-//    } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
+    } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
 //        /* at least one operand is a pointer */
 //        /* relational op: must be both pointers */
 //        if (op >= TOK_ULT && op <= TOK_LOR) {
@@ -972,7 +1177,7 @@ namespace TidePool
 //            vtop->type.t = ptrdiff_type.t;
 //            vswap();
 //            gen_op(TOK_PDIV);
-//        } else {
+        //} else {
 //            /* exactly one pointer : must be '+' or '-'. */
 //            if (op != '-' && op != '+')
 //                tcc_error("cannot use pointers here");
@@ -1037,7 +1242,7 @@ namespace TidePool
 //                /* put again type if gen_opic() swaped operands */
 //                vtop->type = type1;
 //        }
-//    } else if (is_float(bt1) || is_float(bt2)) {
+    } else if (is_float(bt1) || is_float(bt2)) {
 //        /* compute bigger type and do implicit casts */
 //        if (bt1 == VT_LDOUBLE || bt2 == VT_LDOUBLE) {
 //            t = VT_LDOUBLE;
@@ -1051,13 +1256,15 @@ namespace TidePool
 //            (op < TOK_ULT || op > TOK_GT))
 //            tcc_error("invalid operands for binary operation");
 //        goto std_op;
-//    } else if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL) {
+    }
+    else if (op == (int)TPTOKEN.TOK_SHR || op == (int)TPTOKEN.TOK_SAR || op == (int)TPTOKEN.TOK_SHL)
+    {
 //        t = bt1 == VT_LLONG ? VT_LLONG : VT_INT;
 //        if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (t | VT_UNSIGNED))
 //            t |= VT_UNSIGNED;
 //        t |= (VT_LONG & t1);
 //        goto std_op;
-//    } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
+    } else if (bt1 == VT_LLONG || bt2 == VT_LLONG) {
 //        /* cast to biggest op */
 //        t = VT_LLONG | VT_LONG;
 //        if (bt1 == VT_LLONG)
@@ -1069,17 +1276,18 @@ namespace TidePool
 //            (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_LLONG | VT_UNSIGNED))
 //            t |= VT_UNSIGNED;
 //        goto std_op;
-//    } else {
-//        /* integer operations */
-//        t = VT_INT | (VT_LONG & (t1 | t2));
-//        /* convert to unsigned if it does not fit in an integer */
-//        if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED) ||
-//            (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED))
-//            t |= VT_UNSIGNED;
+    } else {
+        /* integer operations */
+        t = VT_INT | (VT_LONG & (t1 | t2));
+        /* convert to unsigned if it does not fit in an integer */
+        if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED) ||
+            (t2 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (VT_INT | VT_UNSIGNED))
+        {
+            t |= VT_UNSIGNED;
+        }
 //std_op:
-//        /* XXX: currently, some unsigned operations are explicit, so
-//        we modify them here */
-//        if (t & VT_UNSIGNED) {
+        /* XXX: currently, some unsigned operations are explicit, so we modify them here */
+        if ((t & VT_UNSIGNED) != 0) {
 //            if (op == TOK_SAR)
 //                op = TOK_SHR;
 //            else if (op == '/')
@@ -1094,28 +1302,27 @@ namespace TidePool
 //                op = TOK_ULE;
 //            else if (op == TOK_GE)
 //                op = TOK_UGE;
-//        }
-//        vswap();
-//        type1.t = t;
-//        type1.ref = NULL;
+        }
+        vswap();
+        type1.t = t;
+        type1.reff = null;
 //        gen_cast(&type1);
-//        vswap();
-//        /* special case for shifts and long long: we keep the shift as
-//        an integer */
+        vswap();
+        /* special case for shifts and long long: we keep the shift as an integer */
 //        if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL)
 //            type1.t = VT_INT;
 //        gen_cast(&type1);
 //        if (is_float(t))
 //            gen_opif(op);
 //        else
-//            gen_opic(op);
+            gen_opic(op);
 //        if (op >= TOK_ULT && op <= TOK_GT) {
 //            /* relational op: the result is an int */
 //            vtop->type.t = VT_INT;
 //        } else {
 //            vtop->type.t = t;
 //        }
-//    }
+    }
 
     // Make sure that we have converted to an rvalue:
 //    if (vtop->r & VT_LVAL)
