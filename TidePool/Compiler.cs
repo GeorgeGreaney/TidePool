@@ -547,7 +547,7 @@ namespace TidePool
             sval.type = type;
             sval.r = r;
             sval.r2 = VT_CONST;
-            sval.c = new CValue(vc);
+            sval.c = vc;
             sval.sym = null;
             vstack[++vtop] = sval;
         }
@@ -1135,7 +1135,7 @@ namespace TidePool
             bt2 = t2 & VT_BTYPE;
 
     if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
-//        tcc_error("operation on a struct");
+        tp.tp_error("operation on a struct");
     } else if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
 //        if (bt2 == VT_FUNC) {
 //            mk_pointer(&vtop->type);

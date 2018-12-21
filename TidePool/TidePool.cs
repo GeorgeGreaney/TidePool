@@ -141,7 +141,7 @@ namespace TidePool
         //    LINE_MACRO_OUTPUT_FORMAT_P10 = 11
         //    } Pflag; /* -P switch */
 
-        //    char dflag; /* -dX value */
+            public int dflag; /* -dX value */
 
         //    /* for -MD/-MF: collected dependencies for this compilation */
         //    char **target_deps;

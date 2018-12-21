@@ -258,6 +258,7 @@ namespace TidePool
         public TidePool tp;
         public Compiler comp;
 
+        //from tcc.h
         public BufferedFile curFile;
         public int ch;
         public int tok;
@@ -272,7 +273,6 @@ namespace TidePool
 
         public int tok_ident;
         public List<TokenSym> table_ident;
-
 
         public const int TOK_FLAG_BOL = 0x0001;		            /* beginning of line before */
         public const int TOK_FLAG_BOF = 0x0002;		            /* beginning of file before */
@@ -334,6 +334,31 @@ namespace TidePool
                                          "pack", "comment", "lib", "push_macro", "pop_macro", "once", "option"
                                        };
 
+        public static int[] tok_two_chars = {
+		        '<','=', (int)TPTOKEN.TOK_LE,
+		        '>','=', (int)TPTOKEN.TOK_GE,
+		        '!','=', (int)TPTOKEN.TOK_NE,
+		        '&','&', (int)TPTOKEN.TOK_LAND,
+		        '|','|', (int)TPTOKEN.TOK_LOR,
+		        '+','+', (int)TPTOKEN.TOK_INC,
+		        '-','-', (int)TPTOKEN.TOK_DEC,
+		        '=','=', (int)TPTOKEN.TOK_EQ,
+		        '<','<', (int)TPTOKEN.TOK_SHL,
+		        '>','>', (int)TPTOKEN.TOK_SAR,
+		        '+','=', (int)TPTOKEN.TOK_A_ADD,
+		        '-','=', (int)TPTOKEN.TOK_A_SUB,
+		        '*','=', (int)TPTOKEN.TOK_A_MUL,
+		        '/','=', (int)TPTOKEN.TOK_A_DIV,
+		        '%','=', (int)TPTOKEN.TOK_A_MOD,
+		        '&','=', (int)TPTOKEN.TOK_A_AND,
+		        '^','=', (int)TPTOKEN.TOK_A_XOR,
+		        '|','=', (int)TPTOKEN.TOK_A_OR,
+		        '-','>', (int)TPTOKEN.TOK_ARROW,
+		        '.','.', (int)TPTOKEN.TOK_TWODOTS,
+		        '#','#', (int)TPTOKEN.TOK_TWOSHARPS,
+		        0 
+                                            };
+
         //---------------------------------------------------------------------
 
         public Preprocessor(TidePool _tp)
@@ -365,29 +390,76 @@ namespace TidePool
 
             for (int i = 128; i < 256; i++)
                 set_idnum(i, IS_ID);
+
+            //            int i, c;
+            //const char *p, *r;
+
+            ///* might be used in error() before preprocess_start() */
+            //s->include_stack_ptr = s->include_stack;			//clear include stack
+            //s->ppfp = stdout;									//def output = std out
+
+            ///* init isid table */
+            //for(i = CH_EOF; i<128; i++)
+            //    set_idnum(i,
+            //    is_space(i) ? IS_SPC
+            //    : isid(i) ? IS_ID
+            //    : isnum(i) ? IS_NUM
+            //    : 0);
+
+            //for(i = 128; i<256; i++)
+            //    set_idnum(i, IS_ID);
+
+            ///* init allocators */
+            //tal_new(&toksym_alloc, TOKSYM_TAL_LIMIT, TOKSYM_TAL_SIZE);
+            //tal_new(&tokstr_alloc, TOKSTR_TAL_LIMIT, TOKSTR_TAL_SIZE);
+            //tal_new(&cstr_alloc, CSTR_TAL_LIMIT, CSTR_TAL_SIZE);
+
+            //memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));		//clear sym tbl
+
+            //cstr_new(&cstr_buf);
+            //cstr_realloc(&cstr_buf, STRING_MAX_SIZE);
+
+            //tok_str_new(&tokstr_buf);
+            //tok_str_realloc(&tokstr_buf, TOKSTR_MAX_SIZE);
+
+            ////add keywords to symbol tbl
+            //tok_ident = TOK_IDENT;
+            //p = tcc_keywords;
+            //while (*p) {
+            //    r = p;
+            //    for(;;) {
+            //        c = *r++;
+            //        if (c == '\0')			//skip to end of sym to get len
+            //            break;
+            //    }
+            //    tok_alloc(p, r - p - 1);	//add keyword to sym tbl
+            //    p = r;
+            //}
+
         }
 
-        public bool is_space(int ch)
+        //inlines from tcc.h
+        private bool is_space(int ch)
         {
             return (ch == ' ' || ch == '\t' || ch == '\v' || ch == '\f' || ch == '\r');
         }
 
-        public bool isid(int c)
+        private bool isid(int c)
         {
             return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
         }
 
-        public bool isnum(int c)
+        private bool isnum(int c)
         {
             return c >= '0' && c <= '9';
         }
 
-        public bool isoct(int c)
+        private bool isoct(int c)
         {
             return c >= '0' && c <= '7';
         }
 
-        public char toup(char c)
+        private char toup(char c)
         {
             return (c >= 'a' && c <= 'z') ? (char)((int)c - 'a' + 'A') : c;
         }
@@ -407,7 +479,7 @@ namespace TidePool
         //- tokens ------------------------------------------------------------
 
         /* allocate a new token */
-        public TokenSym tok_alloc_new(uint hash, String idstr, int len)
+        private TokenSym tok_alloc_new(uint hash, String idstr, int len)
         {
             TokenSym ts;
             int i;
@@ -432,13 +504,13 @@ namespace TidePool
             return ts;
         }
 
-        public uint TOK_HASH_FUNC(uint h, int c)
+        private uint TOK_HASH_FUNC(uint h, int c)
         {
             return ((h) + ((h) << 5) + ((h) >> 27) + (uint)(c));
         }
 
         /* find a token and add it if not found */
-        public TokenSym tok_alloc(string idstr, int len)
+        private TokenSym tok_alloc(string idstr, int len)
         {
             TokenSym ts;
 
@@ -557,16 +629,16 @@ namespace TidePool
                     if (v < (int)TPTOKEN.TOK_IDENT)
                     {
                         /* search in two bytes table */
-                        //            const unsigned char *q = tok_two_chars;
-                        //            while (*q) {
-                        //                if (q[2] == v) {
-                        //                    *p++ = q[0];
-                        //                    *p++ = q[1];
-                        //                    *p = '\0';
-                        //                    return cstr_buf.data;
-                        //                }
-                        //                q += 3;
-                        //            }
+                        int q = 0;
+                        while (tok_two_chars[q] != 0)
+                        {
+                            if (tok_two_chars[q + 2] == v)
+                            {
+                                p = "" + (char)tok_two_chars[q] + (char)tok_two_chars[q + 1];
+                                return p;
+                            }
+                            q += 3;
+                        }
                         if (v >= 127)
                         {
                             return string.Format("<{0}>", v.ToString("X2"));
@@ -600,7 +672,10 @@ namespace TidePool
             return p;
         }
 
-        public int handle_eob()
+        //- buffer input --------------------------------------------------------------
+
+        /* return the current character, handling end of block if necessary (but not stray) */
+        private int handle_eob()
         {
             int len;
 
@@ -635,19 +710,55 @@ namespace TidePool
                 curFile.buf_ptr = curFile.buf_end;
                 return BufferedFile.CH_EOF;						//or eof
             }
-
         }
 
-        public void inp() { }
-
-        public bool handle_stray_noerror()
+        /* read next char from current input file and handle end of input buffer */
+        private void inp()
         {
-            return true;
+            ch = curFile.buffer[curFile.buf_ptr];
+
+            /* end of buffer/file handling */
+            if (ch == BufferedFile.CH_EOB)
+            {
+                ch = handle_eob();
+            }
         }
 
-        public void handle_stray() { }
+        /* handle '\[\r]\n' */
+        private bool handle_stray_noerror()
+        {
+            while (ch == '\\')
+            {
+                inp();
+                if (ch == '\n')
+                {
+                    curFile.line_num++;
+                    inp();
+                }
+                else if (ch == '\r')
+                {
+                    inp();
+                    if (ch != '\n')
+                        return true;
+                    curFile.line_num++;
+                    inp();
+                }
+                else
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
-        public int handle_stray1(int p)
+        private void handle_stray()
+        {
+            if (handle_stray_noerror())
+                tp.tp_error("stray '\\' in program");
+        }
+
+        /* skip the stray and handle the \\n case. Output an error if incorrect char after the stray */
+        private int handle_stray1(int p)
         {
             int c;
 
@@ -671,8 +782,21 @@ namespace TidePool
             return c;
         }
 
+        /* handle just the EOB case, but not stray */
+        private void PEEKC_EOB(ref int c, ref int p)
+        {
+            p++;
+            c = curFile.buffer[p];
+            if (c == '\\')
+            {
+                curFile.buf_ptr = p;
+                c = handle_eob();
+                p = curFile.buf_ptr;
+            }
+        }
+
         /* handle the complicated stray case */
-        public void PEEKC(ref int c, ref int p)
+        private void PEEKC(ref int c, ref int p)
         {
             p++;
             c = curFile.buffer[p];
@@ -683,11 +807,172 @@ namespace TidePool
             }
         }
 
-        public void minp() { }
-        public void parse_line_comment() { }
-        public void parse_comment() { }
+        /* input with '\[\r]\n' handling. Note that this function cannot
+        handle other characters after '\', so you cannot call it inside strings or comments */
+        private void minp()
+        {
+            inp();
+            if (ch == '\\')
+                handle_stray();
+        }
 
-        public int set_idnum(int c, int val)
+        //- whitespace ----------------------------------------------------------------
+
+        /* single line C++ comments */
+        private int parse_line_comment(int p)
+        {
+            int c;
+
+            p++;
+            for (; ; )
+            {
+                c = curFile.buffer[p];
+            redo:
+                if (c == '\n' || c == BufferedFile.CH_EOF)
+                {
+                    break;
+                }
+                else if (c == '\\')
+                {
+                    curFile.buf_ptr = p;
+                    c = handle_eob();
+                    p = curFile.buf_ptr;
+                    if (c == '\\')
+                    {
+                        PEEKC_EOB(ref c, ref p);
+                        if (c == '\n')
+                        {
+                            curFile.line_num++;
+                            PEEKC_EOB(ref c, ref p);
+                        }
+                        else if (c == '\r')
+                        {
+                            PEEKC_EOB(ref c, ref p);
+                            if (c == '\n')
+                            {
+                                curFile.line_num++;
+                                PEEKC_EOB(ref c, ref p);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        goto redo;
+                    }
+                }
+                else
+                {
+                    p++;
+                }
+            }
+            return p;
+        }
+
+        /* C comments */
+        private int parse_comment(int p)
+        {
+            int c;
+
+            p++;
+            for (; ; )
+            {
+                /* fast skip loop */
+                for (; ; )
+                {
+                    c = curFile.buffer[p];
+                    if (c == '\n' || c == '*' || c == '\\')
+                        break;
+                    p++;
+                    c = curFile.buffer[p];
+                    if (c == '\n' || c == '*' || c == '\\')
+                        break;
+                    p++;
+                }
+                /* now we can handle all the cases */
+                if (c == '\n')
+                {
+                    curFile.line_num++;
+                    p++;
+                }
+                else if (c == '*')
+                {
+                    p++;
+                    for (; ; )
+                    {
+                        c = curFile.buffer[p];
+                        if (c == '*')
+                        {
+                            p++;
+                        }
+                        else if (c == '/')
+                        {
+                            goto end_of_comment;
+                        }
+                        else if (c == '\\')
+                        {
+                            curFile.buf_ptr = p;
+                            c = handle_eob();
+                            p = curFile.buf_ptr;
+                            if (c == BufferedFile.CH_EOF)
+                            {
+                                tp.tp_error("unexpected end of file in comment");
+                            }
+                            if (c == '\\')
+                            {
+                                /* skip '\[\r]\n', otherwise just skip the stray */
+                                while (c == '\\')
+                                {
+                                    PEEKC_EOB(ref c, ref p);
+                                    if (c == '\n')
+                                    {
+                                        curFile.line_num++;
+                                        PEEKC_EOB(ref c, ref p);
+                                    }
+                                    else if (c == '\r')
+                                    {
+                                        PEEKC_EOB(ref c, ref p);
+                                        if (c == '\n')
+                                        {
+                                            curFile.line_num++;
+                                            PEEKC_EOB(ref c, ref p);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        goto after_star;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                after_star: ;
+                }
+                else
+                {
+                    /* stray, eob or eof */
+                    //            file->buf_ptr = p;
+                    //            c = handle_eob();
+                    //            p = file->buf_ptr;
+                    //            if (c == CH_EOF)
+                    //            {
+                    //                tcc_error("unexpected end of file in comment");
+                    //            }
+                    //            else if (c == '\\')
+                    //            {
+                    //                p++;
+                    //            }
+                }
+            }
+        end_of_comment:
+            p++;
+            return p;
+        }
+
+        private int set_idnum(int c, int val)
         {
             int idx = c - BufferedFile.CH_EOF;
             int prev = isidnum_table[idx];
@@ -695,45 +980,1461 @@ namespace TidePool
             return prev;
         }
 
-        public void skip_spaces() { }
-        public void check_space() { }
-        public void parse_pp_string() { }
-        public void preprocess_skip() { }
+        private void skip_spaces()
+        {
+            while ((isidnum_table[ch - BufferedFile.CH_EOF] & IS_SPC) != 0)
+                minp();
+        }
 
-        public void tok_str_new() { }
-        public void tok_str_alloc() { }
-        public void tok_str_dup() { }
-        public void tok_str_free_str() { }
-        public void tok_str_free() { }
-        public void tok_str_realloc() { }
-        public void tok_str_add() { }
+        private int check_space(int t, ref int spc)
+        {
+            if (t < 256 && ((isidnum_table[t - BufferedFile.CH_EOF] & IS_SPC) != 0))
+            {
+                if (spc != 0)
+                    return 1;
+                spc = 1;
+            }
+            else
+                spc = 0;
+            return 0;
+        }
 
-        public void begin_macro() { }
-        public void end_macro() { }
-        public void tok_str_add2() { }
-        public void tok_str_add_tok() { }
-        public void TOK_GET() { }
-        public void macro_is_equal() { }
-        public void define_push() { }
-        public void define_undef() { }
-        public void define_find() { }
-        public void free_defines() { }
-        public void label_find() { }
-        public void label_push() { }
-        public void label_pop() { }
-        public void maybe_run_test() { }
-        public void expr_preprocess() { }
-        public void parse_define() { }
-        public void search_cached_include() { }
-        public void pragma_parse() { }
-        public void preprocess() { }
-        public void parse_escape_string() { }
-        public void parse_string() { }
-        public void bn_lshift() { }
-        public void bn_zero() { }
+        /* parse a string without interpreting escapes */
+        private void parse_pp_string()
+        {
+            //int c;
+
+            //p++;
+            //for (; ; )
+            //{
+            //    c = *p;
+            //    if (c == sep)
+            //    {
+            //        break;
+            //    }
+            //    else if (c == '\\')
+            //    {
+            //        file->buf_ptr = p;
+            //        c = handle_eob();
+            //        p = file->buf_ptr;
+            //        if (c == CH_EOF)
+            //        {
+            //        unterminated_string:
+            //            /* XXX: indicate line number of start of string */
+            //            tcc_error("missing terminating %c character", sep);
+            //        }
+            //        else if (c == '\\')
+            //        {
+            //            /* escape : just skip \[\r]\n */
+            //            PEEKC_EOB(c, p);
+            //            if (c == '\n')
+            //            {
+            //                file->line_num++;
+            //                p++;
+            //            }
+            //            else if (c == '\r')
+            //            {
+            //                PEEKC_EOB(c, p);
+            //                if (c != '\n')
+            //                    expect("'\n' after '\r'");
+            //                file->line_num++;
+            //                p++;
+            //            }
+            //            else if (c == CH_EOF)
+            //            {
+            //                goto unterminated_string;
+            //            }
+            //            else
+            //            {
+            //                if (str)
+            //                {
+            //                    cstr_ccat(str, '\\');
+            //                    cstr_ccat(str, c);
+            //                }
+            //                p++;
+            //            }
+            //        }
+            //    }
+            //    else if (c == '\n')
+            //    {
+            //        file->line_num++;
+            //        goto add_char;
+            //    }
+            //    else if (c == '\r')
+            //    {
+            //        PEEKC_EOB(c, p);
+            //        if (c != '\n')
+            //        {
+            //            if (str)
+            //                cstr_ccat(str, '\r');
+            //        }
+            //        else
+            //        {
+            //            file->line_num++;
+            //            goto add_char;
+            //        }
+            //    }
+            //    else
+            //    {
+            //    add_char:
+            //        if (str)
+            //            cstr_ccat(str, c);
+            //        p++;
+            //    }
+            //}
+            //p++;
+            //return p;
+
+        }
+
+        /* skip block of text until #else, #elif or #endif. skip also pairs of #if/#endif */
+        private void preprocess_skip()
+        {
+            //                int a, start_of_line, c, in_warn_or_error;
+            //    uint8_t *p;
+
+            //    p = file->buf_ptr;
+            //    a = 0;
+            //redo_start:
+            //    start_of_line = 1;
+            //    in_warn_or_error = 0;
+            //    for(;;) {
+            //redo_no_start:
+            //        c = *p;
+            //        switch(c) {
+            //        case ' ':
+            //        case '\t':
+            //        case '\f':
+            //        case '\v':
+            //        case '\r':
+            //            p++;
+            //            goto redo_no_start;
+            //        case '\n':
+            //            file->line_num++;
+            //            p++;
+            //            goto redo_start;
+            //        case '\\':
+            //            file->buf_ptr = p;
+            //            c = handle_eob();
+            //            if (c == CH_EOF) {
+            //                expect("#endif");
+            //            } else if (c == '\\') {
+            //                ch = file->buf_ptr[0];
+            //                handle_stray_noerror();
+            //            }
+            //            p = file->buf_ptr;
+            //            goto redo_no_start;
+            //            /* skip strings */
+            //        case '\"':
+            //        case '\'':
+            //            if (in_warn_or_error)
+            //                goto _default;
+            //            p = parse_pp_string(p, c, NULL);
+            //            break;
+            //            /* skip comments */
+            //        case '/':
+            //            if (in_warn_or_error)
+            //                goto _default;
+            //            file->buf_ptr = p;
+            //            ch = *p;
+            //            minp();
+            //            p = file->buf_ptr;
+            //            if (ch == '*') {
+            //                p = parse_comment(p);
+            //            } else if (ch == '/') {
+            //                p = parse_line_comment(p);
+            //            }
+            //            break;
+            //        case '#':
+            //            p++;
+            //            if (start_of_line) {
+            //                file->buf_ptr = p;
+            //                next_nomacro();
+            //                p = file->buf_ptr;
+            //                if (a == 0 && 
+            //                    (tok == TOK_ELSE || tok == TOK_ELIF || tok == TOK_ENDIF))
+            //                    goto the_end;
+            //                if (tok == TOK_IF || tok == TOK_IFDEF || tok == TOK_IFNDEF)
+            //                    a++;
+            //                else if (tok == TOK_ENDIF)
+            //                    a--;
+            //                else if( tok == TOK_ERROR || tok == TOK_WARNING)
+            //                    in_warn_or_error = 1;
+            //                else if (tok == TOK_LINEFEED)
+            //                    goto redo_start;
+            //                else if (parse_flags & PARSE_FLAG_ASM_FILE)
+            //                    p = parse_line_comment(p - 1);
+            //            } else if (parse_flags & PARSE_FLAG_ASM_FILE)
+            //                p = parse_line_comment(p - 1);
+            //            break;
+            //_default:
+            //        default:
+            //            p++;
+            //            break;
+            //        }
+            //        start_of_line = 0;
+            //    }
+            //the_end: ;
+            //    file->buf_ptr = p;
+
+
+        }
+
+        //- token string funcs --------------------------------------------------------
+
+        /* token string handling */
+        //public void tok_str_new(TokenString* s)
+        private void tok_str_new()
+        {
+            //s->str = NULL;
+            //s->len = s->lastlen = 0;
+            //s->allocated_len = 0;
+            //s->last_line_num = -1;
+
+        }
+
+        //public TokenString* tok_str_alloc() 
+        private void tok_str_alloc()
+        {
+            //            TokenString *str = tal_realloc(tokstr_alloc, 0, sizeof *str);
+            //tok_str_new(str);
+            //return str;
+
+        }
+
+        private void tok_str_dup()
+        {
+            //int* str;
+
+            //str = tal_realloc(tokstr_alloc, 0, s->len * sizeof(int));
+            //memcpy(str, s->str, s->len * sizeof(int));
+            //return str;
+
+        }
+
+        private void tok_str_free_str()
+        {
+            //            tal_free(tokstr_alloc, str);
+        }
+
+        private void tok_str_free()
+        {
+            //tok_str_free_str(str->str);
+            //tal_free(tokstr_alloc, str);
+        }
+
+        private void tok_str_realloc()
+        {
+            //int* str, size;
+
+            //size = s->allocated_len;
+            //if (size < 16)
+            //    size = 16;
+            //while (size < new_size)
+            //    size = size * 2;
+            //if (size > s->allocated_len)
+            //{
+            //    str = tal_realloc(tokstr_alloc, s->str, size * sizeof(int));
+            //    s->allocated_len = size;
+            //    s->str = str;
+            //}
+            //return s->str;
+        }
+
+        private void tok_str_add()
+        {
+            //            int len, *str;
+
+            //len = s->len;
+            //str = s->str;
+            //if (len >= s->allocated_len)
+            //    str = tok_str_realloc(s, len + 1);
+            //str[len++] = t;
+            //s->len = len;
+
+        }
+
+        private void begin_macro()
+        {
+            //str->alloc = alloc;
+            //str->prev = macro_stack;
+            //str->prev_ptr = macro_ptr;
+            //str->save_line_num = file->line_num;
+            //macro_ptr = str->str;
+            //macro_stack = str;
+
+        }
+
+        private void end_macro()
+        {
+            //TokenString* str = macro_stack;
+            //macro_stack = str->prev;
+            //macro_ptr = str->prev_ptr;
+            //file->line_num = str->save_line_num;
+            //if (str->alloc == 2)
+            //{
+            //    str->alloc = 3; /* just mark as finished */
+            //}
+            //else
+            //{
+            //    tok_str_free(str);
+            //}
+        }
+
+        private void tok_str_add2()
+        {
+            //                int len, *str;
+
+            //    len = s->lastlen = s->len;
+            //    str = s->str;
+
+            //    /* allocate space for worst case */
+            //    if (len + TOK_MAX_SIZE >= s->allocated_len)
+            //        str = tok_str_realloc(s, len + TOK_MAX_SIZE + 1);
+            //    str[len++] = t;
+            //    switch(t) {
+            //    case TOK_CINT:
+            //    case TOK_CUINT:
+            //    case TOK_CCHAR:
+            //    case TOK_LCHAR:
+            //    case TOK_CFLOAT:
+            //    case TOK_LINENUM:
+            //#if LONG_SIZE == 4
+            //    case TOK_CLONG:
+            //    case TOK_CULONG:
+            //#endif
+            //        str[len++] = cv->tab[0];
+            //        break;
+            //    case TOK_PPNUM:
+            //    case TOK_PPSTR:
+            //    case TOK_STR:
+            //    case TOK_LSTR:
+            //        {
+            //            /* Insert the string into the int array. */
+            //            size_t nb_words =
+            //                1 + (cv->str.size + sizeof(int) - 1) / sizeof(int);
+            //            if (len + nb_words >= s->allocated_len)
+            //                str = tok_str_realloc(s, len + nb_words + 1);
+            //            str[len] = cv->str.size;
+            //            memcpy(&str[len + 1], cv->str.data, cv->str.size);
+            //            len += nb_words;
+            //        }
+            //        break;
+            //    case TOK_CDOUBLE:
+            //    case TOK_CLLONG:
+            //    case TOK_CULLONG:
+            //#if LONG_SIZE == 8
+            //    case TOK_CLONG:
+            //    case TOK_CULONG:
+            //#endif
+            //#if LDOUBLE_SIZE == 8
+            //    case TOK_CLDOUBLE:
+            //#endif
+            //        str[len++] = cv->tab[0];
+            //        str[len++] = cv->tab[1];
+            //        break;
+            //#if LDOUBLE_SIZE == 12
+            //    case TOK_CLDOUBLE:
+            //        str[len++] = cv->tab[0];
+            //        str[len++] = cv->tab[1];
+            //        str[len++] = cv->tab[2];
+            //#elif LDOUBLE_SIZE == 16
+            //    case TOK_CLDOUBLE:
+            //        str[len++] = cv->tab[0];
+            //        str[len++] = cv->tab[1];
+            //        str[len++] = cv->tab[2];
+            //        str[len++] = cv->tab[3];
+            //#elif LDOUBLE_SIZE != 8
+            //#error add long double size support
+            //#endif
+            //        break;
+            //    default:
+            //        break;
+            //    }
+            //    s->len = len;
+        }
+
+        /* add the current parse token in token string 's' */
+        private void tok_str_add_tok()
+        {
+            //CValue cval;
+
+            ///* save line number info */
+            //if (file->line_num != s->last_line_num)
+            //{
+            //    s->last_line_num = file->line_num;
+            //    cval.i = s->last_line_num;
+            //    tok_str_add2(s, TOK_LINENUM, &cval);
+            //}
+            //tok_str_add2(s, tok, &tokc);
+        }
+
+        /* get a token from an integer array and increment pointer
+accordingly. we code it as a macro to avoid pointer aliasing. */
+        private void TOK_GET()
+        {
+            //                const int *p = *pp;
+            //    int n, *tab;
+
+            //    tab = cv->tab;
+            //    switch(*t = *p++) {
+            //#if LONG_SIZE == 4
+            //    case TOK_CLONG:
+            //#endif
+            //    case TOK_CINT:
+            //    case TOK_CCHAR:
+            //    case TOK_LCHAR:
+            //    case TOK_LINENUM:
+            //        cv->i = *p++;
+            //        break;
+            //#if LONG_SIZE == 4
+            //    case TOK_CULONG:
+            //#endif
+            //    case TOK_CUINT:
+            //        cv->i = (unsigned)*p++;
+            //        break;
+            //    case TOK_CFLOAT:
+            //        tab[0] = *p++;
+            //        break;
+            //    case TOK_STR:
+            //    case TOK_LSTR:
+            //    case TOK_PPNUM:
+            //    case TOK_PPSTR:
+            //        cv->str.size = *p++;
+            //        cv->str.data = p;
+            //        p += (cv->str.size + sizeof(int) - 1) / sizeof(int);
+            //        break;
+            //    case TOK_CDOUBLE:
+            //    case TOK_CLLONG:
+            //    case TOK_CULLONG:
+            //#if LONG_SIZE == 8
+            //    case TOK_CLONG:
+            //    case TOK_CULONG:
+            //#endif
+            //        n = 2;
+            //        goto copy;
+            //    case TOK_CLDOUBLE:
+            //#if LDOUBLE_SIZE == 16
+            //        n = 4;
+            //#elif LDOUBLE_SIZE == 12
+            //        n = 3;
+            //#elif LDOUBLE_SIZE == 8
+            //        n = 2;
+            //#else
+            //# error add long double size support
+            //#endif
+            //copy:
+            //        do
+            //        *tab++ = *p++;
+            //        while (--n);
+            //        break;
+            //    default:
+            //        break;
+            //    }
+            //    *pp = p;
+
+        }
+
+        private void macro_is_equal()
+        {
+            //CValue cv;
+            //int t;
+
+            //if (!a || !b)
+            //    return 1;
+
+            //while (*a && *b)
+            //{
+            //    /* first time preallocate macro_equal_buf, next time only reset position to start */
+            //    cstr_reset(&macro_equal_buf);
+            //    TOK_GET(&t, &a, &cv);
+            //    cstr_cat(&macro_equal_buf, get_tok_str(t, &cv), 0);
+            //    TOK_GET(&t, &b, &cv);
+            //    if (strcmp(macro_equal_buf.data, get_tok_str(t, &cv)))
+            //        return 0;
+            //}
+            //return !(*a || *b);
+
+        }
+
+        // defines handling ---------------------------------------------------
+
+        private void define_push()
+        {
+            //            Sym *s, *o;
+
+            //o = define_find(v);
+            //s = sym_push2(&define_stack, v, macro_type, 0);
+            //s->d = str;
+            //s->next = first_arg;
+            //table_ident[v - TOK_IDENT]->sym_define = s;
+
+            //if (o && !macro_is_equal(o->d, s->d))
+            //    tcc_warning("%s redefined", get_tok_str(v, NULL));
+
+        }
+
+        /* undefined a define symbol. Its name is just set to zero */
+        private void define_undef()
+        {
+            //int v = s->v;
+            //if (v >= TOK_IDENT && v < tok_ident)
+            //    table_ident[v - TOK_IDENT]->sym_define = NULL;
+        }
+
+        private void define_find()
+        {
+            //v -= TOK_IDENT;
+            //if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
+            //    return NULL;
+            //return table_ident[v]->sym_define;
+        }
+
+        /* free define stack until top reaches 'b' */
+        private void free_defines()
+        {
+            //while (define_stack != b)
+            //{
+            //    Sym* top = define_stack;
+            //    define_stack = top->prev;
+            //    tok_str_free_str(top->d);
+            //    define_undef(top);
+            //    sym_free(top);
+            //}
+
+            ///* restore remaining (-D or predefined) symbols if they were
+            //#undef'd in the file */
+            //while (b)
+            //{
+            //    int v = b->v;
+            //    if (v >= TOK_IDENT && v < tok_ident)
+            //    {
+            //        Sym** d = &table_ident[v - TOK_IDENT]->sym_define;
+            //        if (!*d)
+            //            *d = b;
+            //    }
+            //    b = b->prev;
+            //}
+        }
+
+        /* label lookup */
+        private void label_find()
+        {
+            //v -= TOK_IDENT;
+            //if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
+            //    return NULL;
+            //return table_ident[v]->sym_label;
+        }
+
+        private void label_push()
+        {
+            //            Sym *s, **ps;
+            //s = sym_push2(ptop, v, 0, 0);
+            //s->r = flags;
+            //ps = &table_ident[v - TOK_IDENT]->sym_label;
+            //if (ptop == &global_label_stack) {
+            //    /* modify the top most local identifier, so that
+            //    sym_identifier will point to 's' when popped */
+            //    while (*ps != NULL)
+            //        ps = &(*ps)->prev_tok;
+            //}
+            //s->prev_tok = *ps;
+            //*ps = s;
+            //return s;
+
+        }
+
+        /* pop labels until element last is reached. Look if any labels are
+undefined. Define symbols if '&&label' was used. */
+        private void label_pop()
+        {
+            //            Sym *s, *s1;
+            //for(s = *ptop; s != slast; s = s1) {
+            //    s1 = s->prev;
+            //    if (s->r == LABEL_DECLARED) {
+            //        tcc_warning("label '%s' declared but not used", get_tok_str(s->v, NULL));
+            //    } else if (s->r == LABEL_FORWARD) {
+            //        tcc_error("label '%s' used but not defined",
+            //            get_tok_str(s->v, NULL));
+            //    } else {
+            //        if (s->c) {
+            //            /* define corresponding symbol. A size of
+            //            1 is put. */
+            //            put_extern_sym(s, cur_text_section, s->jnext, 1);
+            //        }
+            //    }
+            //    /* remove label */
+            //    table_ident[s->v - TOK_IDENT]->sym_label = s->prev_tok;
+            //    if (!keep)
+            //        sym_free(s);
+            //}
+            //if (!keep)
+            //    *ptop = slast;
+
+        }
+
+        /* fake the nth "#if defined test_..." for tcc -dt -run */
+        private void maybe_run_test()
+        {
+            //            const char *p;
+            //if (s->include_stack_ptr != s->include_stack)
+            //    return;
+            //p = get_tok_str(tok, NULL);
+            //if (0 != memcmp(p, "test_", 5))
+            //    return;
+            //if (0 != --s->run_test)
+            //    return;
+            //fprintf(s->ppfp, "\n[%s]\n" + !(s->dflag & 32), p), fflush(s->ppfp);
+            //define_push(tok, MACRO_OBJ, NULL, NULL);
+
+        }
+
+        /* eval an expression for #if/#elif */
+        private void expr_preprocess()
+        {
+            //int c, t;
+            //TokenString* str;
+
+            //str = tok_str_alloc();
+            //pp_expr = 1;
+            //while (tok != TOK_LINEFEED && tok != TOK_EOF)
+            //{
+            //    next(); /* do macro subst */
+            //    if (tok == TOK_DEFINED)
+            //    {
+            //        next_nomacro();
+            //        t = tok;
+            //        if (t == '(')
+            //            next_nomacro();
+            //        if (tok < TOK_IDENT)
+            //            expect("identifier");
+            //        if (tcc_state->run_test)
+            //            maybe_run_test(tcc_state);
+            //        c = define_find(tok) != 0;
+            //        if (t == '(')
+            //        {
+            //            next_nomacro();
+            //            if (tok != ')')
+            //                expect("')'");
+            //        }
+            //        tok = TOK_CINT;
+            //        tokc.i = c;
+            //    }
+            //    else if (tok >= TOK_IDENT)
+            //    {
+            //        /* if undefined macro */
+            //        tok = TOK_CINT;
+            //        tokc.i = 0;
+            //    }
+            //    tok_str_add_tok(str);
+            //}
+            //pp_expr = 0;
+            //tok_str_add(str, -1); /* simulate end of file */
+            //tok_str_add(str, 0);
+            ///* now evaluate C constant expression */
+            //begin_macro(str, 1);
+            //next();
+            //c = expr_const();
+            //end_macro();
+            //return c != 0;
+
+        }
+
+        /* parse after #define */
+        private void parse_define()
+        {
+            //                Sym *s, *first, **ps;
+            //    int v, t, varg, is_vaargs, spc;
+            //    int saved_parse_flags = parse_flags;
+
+            //    v = tok;
+            //    if (v < TOK_IDENT || v == TOK_DEFINED)
+            //        tcc_error("invalid macro name '%s'", get_tok_str(tok, &tokc));
+            //    /* XXX: should check if same macro (ANSI) */
+            //    first = NULL;
+            //    t = MACRO_OBJ;
+            //    /* We have to parse the whole define as if not in asm mode, in particular
+            //    no line comment with '#' must be ignored.  Also for function
+            //    macros the argument list must be parsed without '.' being an ID
+            //    character.  */
+            //    parse_flags = ((parse_flags & ~PARSE_FLAG_ASM_FILE) | PARSE_FLAG_SPACES);
+            //    /* '(' must be just after macro definition for MACRO_FUNC */
+            //    next_nomacro_spc();
+            //    if (tok == '(') {
+            //        int dotid = set_idnum('.', 0);
+            //        next_nomacro();
+            //        ps = &first;
+            //        if (tok != ')') for (;;) {
+            //            varg = tok;
+            //            next_nomacro();
+            //            is_vaargs = 0;
+            //            if (varg == TOK_DOTS) {
+            //                varg = TOK___VA_ARGS__;
+            //                is_vaargs = 1;
+            //            } else if (tok == TOK_DOTS && gnu_ext) {
+            //                is_vaargs = 1;
+            //                next_nomacro();
+            //            }
+            //            if (varg < TOK_IDENT)
+            //bad_list:
+            //            tcc_error("bad macro parameter list");
+            //            s = sym_push2(&define_stack, varg | SYM_FIELD, is_vaargs, 0);
+            //            *ps = s;
+            //            ps = &s->next;
+            //            if (tok == ')')
+            //                break;
+            //            if (tok != ',' || is_vaargs)
+            //                goto bad_list;
+            //            next_nomacro();
+            //        }
+            //        next_nomacro_spc();
+            //        t = MACRO_FUNC;
+            //        set_idnum('.', dotid);
+            //    }
+
+            //    tokstr_buf.len = 0;
+            //    spc = 2;
+            //    parse_flags |= PARSE_FLAG_ACCEPT_STRAYS | PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED;
+            //    /* The body of a macro definition should be parsed such that identifiers
+            //    are parsed like the file mode determines (i.e. with '.' being an
+            //    ID character in asm mode).  But '#' should be retained instead of
+            //    regarded as line comment leader, so still don't set ASM_FILE
+            //    in parse_flags. */
+            //    while (tok != TOK_LINEFEED && tok != TOK_EOF) {
+            //        /* remove spaces around ## and after '#' */
+            //        if (TOK_TWOSHARPS == tok) {
+            //            if (2 == spc)
+            //                goto bad_twosharp;
+            //            if (1 == spc)
+            //                --tokstr_buf.len;
+            //            spc = 3;
+            //            tok = TOK_PPJOIN;
+            //        } else if ('#' == tok) {
+            //            spc = 4;
+            //        } else if (check_space(tok, &spc)) {
+            //            goto skip;
+            //        }
+            //        tok_str_add2(&tokstr_buf, tok, &tokc);
+            //skip:
+            //        next_nomacro_spc();
+            //    }
+
+            //    parse_flags = saved_parse_flags;
+            //    if (spc == 1)
+            //        --tokstr_buf.len; /* remove trailing space */
+            //    tok_str_add(&tokstr_buf, 0);
+            //    if (3 == spc)
+            //bad_twosharp:
+            //    tcc_error("'##' cannot appear at either end of macro");
+            //    define_push(v, t, tok_str_dup(&tokstr_buf), first);
+
+        }
+
+        private void search_cached_include()
+        {
+            //                const unsigned char *s;
+            //    unsigned int h;
+            //    CachedInclude *e;
+            //    int i;
+
+            //    h = TOK_HASH_INIT;
+            //    s = (unsigned char *) filename;
+            //    while (*s) {
+            //#ifdef _WIN32
+            //        h = TOK_HASH_FUNC(h, toup(*s));
+            //#else
+            //        h = TOK_HASH_FUNC(h, *s);
+            //#endif
+            //        s++;
+            //    }
+            //    h &= (CACHED_INCLUDES_HASH_SIZE - 1);
+
+            //    i = s1->cached_includes_hash[h];
+            //    for(;;) {
+            //        if (i == 0)
+            //            break;
+            //        e = s1->cached_includes[i - 1];
+            //        if (0 == PATHCMP(e->filename, filename))
+            //            return e;
+            //        i = e->hash_next;
+            //    }
+            //    if (!add)
+            //        return NULL;
+
+            //    e = tcc_malloc(sizeof(CachedInclude) + strlen(filename));
+            //    strcpy(e->filename, filename);
+            //    e->ifndef_macro = e->once = 0;
+            //    dynarray_add(&s1->cached_includes, &s1->nb_cached_includes, e);
+            //    /* add in hash table */
+            //    e->hash_next = s1->cached_includes_hash[h];
+            //    s1->cached_includes_hash[h] = s1->nb_cached_includes;
+            //#ifdef INC_DEBUG
+            //    printf("adding cached '%s'\n", filename);
+            //#endif
+            //    return e;
+
+        }
+
+        private void pragma_parse()
+        {
+            //    next_nomacro();
+            //    if (tok == TOK_push_macro || tok == TOK_pop_macro) {
+            //        int t = tok, v;
+            //        Sym *s;
+
+            //        if (next(), tok != '(')
+            //            goto pragma_err;
+            //        if (next(), tok != TOK_STR)
+            //            goto pragma_err;
+            //        v = tok_alloc(tokc.str.data, tokc.str.size - 1)->tok;
+            //        if (next(), tok != ')')
+            //            goto pragma_err;
+            //        if (t == TOK_push_macro) {
+            //            while (NULL == (s = define_find(v)))
+            //                define_push(v, 0, NULL, NULL);
+            //            s->type.ref = s; /* set push boundary */
+            //        } else {
+            //            for (s = define_stack; s; s = s->prev)
+            //                if (s->v == v && s->type.ref == s) {
+            //                    s->type.ref = NULL;
+            //                    break;
+            //                }
+            //        }
+            //        if (s)
+            //            table_ident[v - TOK_IDENT]->sym_define = s->d ? s : NULL;
+            //        else
+            //            tcc_warning("unbalanced #pragma pop_macro");
+            //        pp_debug_tok = t, pp_debug_symv = v;
+
+            //    } else if (tok == TOK_once) {
+            //        search_cached_include(s1, file->filename, 1)->once = pp_once;
+
+            //    } else if (s1->output_type == TCC_OUTPUT_PREPROCESS) {
+            //        /* tcc -E: keep pragmas below unchanged */
+            //        unget_tok(' ');
+            //        unget_tok(TOK_PRAGMA);
+            //        unget_tok('#');
+            //        unget_tok(TOK_LINEFEED);
+
+            //    } else if (tok == TOK_pack) {
+            //        /* This may be:
+            //        #pragma pack(1) // set
+            //        #pragma pack() // reset to default
+            //        #pragma pack(push,1) // push & set
+            //        #pragma pack(pop) // restore previous */
+            //        next();
+            //        skip('(');
+            //        if (tok == TOK_ASM_pop) {
+            //            next();
+            //            if (s1->pack_stack_ptr <= s1->pack_stack) {
+            //stk_error:
+            //                tcc_error("out of pack stack");
+            //            }
+            //            s1->pack_stack_ptr--;
+            //        } else {
+            //            int val = 0;
+            //            if (tok != ')') {
+            //                if (tok == TOK_ASM_push) {
+            //                    next();
+            //                    if (s1->pack_stack_ptr >= s1->pack_stack + PACK_STACK_SIZE - 1)
+            //                        goto stk_error;
+            //                    s1->pack_stack_ptr++;
+            //                    skip(',');
+            //                }
+            //                if (tok != TOK_CINT)
+            //                    goto pragma_err;
+            //                val = tokc.i;
+            //                if (val < 1 || val > 16 || (val & (val - 1)) != 0)
+            //                    goto pragma_err;
+            //                next();
+            //            }
+            //            *s1->pack_stack_ptr = val;
+            //        }
+            //        if (tok != ')')
+            //            goto pragma_err;
+
+            //    } else if (tok == TOK_comment) {
+            //        char *p; int t;
+            //        next();
+            //        skip('(');
+            //        t = tok;
+            //        next();
+            //        skip(',');
+            //        if (tok != TOK_STR)
+            //            goto pragma_err;
+            //        p = tcc_strdup((char *)tokc.str.data);
+            //        next();
+            //        if (tok != ')')
+            //            goto pragma_err;
+            //        if (t == TOK_lib) {
+            //            dynarray_add(&s1->pragma_libs, &s1->nb_pragma_libs, p);
+            //        } else {
+            //            if (t == TOK_option)
+            //                tcc_set_options(s1, p);
+            //            tcc_free(p);
+            //        }
+
+            //    } else if (s1->warn_unsupported) {
+            //        tcc_warning("#pragma %s is ignored", get_tok_str(tok, &tokc));
+            //    }
+            //    return;
+
+            //pragma_err:
+            //    tcc_error("malformed #pragma directive");
+            //    return;
+
+        }
+
+        /* is_bof is true if first non space token at beginning of file */
+        private void preprocess()
+        {
+            //                TCCState *s1 = tcc_state;
+            //    int i, c, n, saved_parse_flags;
+            //    char buf[1024], *q;
+            //    Sym *s;
+
+            //    saved_parse_flags = parse_flags;
+            //    parse_flags = PARSE_FLAG_PREPROCESS
+            //        | PARSE_FLAG_TOK_NUM
+            //        | PARSE_FLAG_TOK_STR
+            //        | PARSE_FLAG_LINEFEED
+            //        | (parse_flags & PARSE_FLAG_ASM_FILE)
+            //        ;
+
+            //    next_nomacro();
+            //redo:
+            //    switch(tok) {
+            //    case TOK_DEFINE:
+            //        pp_debug_tok = tok;
+            //        next_nomacro();
+            //        pp_debug_symv = tok;
+            //        parse_define();
+            //        break;
+            //    case TOK_UNDEF:
+            //        pp_debug_tok = tok;
+            //        next_nomacro();
+            //        pp_debug_symv = tok;
+            //        s = define_find(tok);
+            //        /* undefine symbol by putting an invalid name */
+            //        if (s)
+            //            define_undef(s);
+            //        break;
+            //    case TOK_INCLUDE:
+            //    case TOK_INCLUDE_NEXT:
+            //        ch = file->buf_ptr[0];
+            //        /* XXX: incorrect if comments : use next_nomacro with a special mode */
+            //        skip_spaces();
+            //        if (ch == '<') {
+            //            c = '>';
+            //            goto read_name;
+            //        } else if (ch == '\"') {
+            //            c = ch;
+            //read_name:
+            //            inp();
+            //            q = buf;
+            //            while (ch != c && ch != '\n' && ch != CH_EOF) {
+            //                if ((q - buf) < sizeof(buf) - 1)
+            //                    *q++ = ch;
+            //                if (ch == '\\') {
+            //                    if (handle_stray_noerror() == 0)
+            //                        --q;
+            //                } else
+            //                    inp();
+            //            }
+            //            *q = '\0';
+            //            minp();
+            //#if 0
+            //            /* eat all spaces and comments after include */
+            //            /* XXX: slightly incorrect */
+            //            while (ch1 != '\n' && ch1 != CH_EOF)
+            //                inp();
+            //#endif
+            //        } else {
+            //            int len;
+            //            /* computed #include : concatenate everything up to linefeed,
+            //            the result must be one of the two accepted forms.
+            //            Don't convert pp-tokens to tokens here.  */
+            //            parse_flags = (PARSE_FLAG_PREPROCESS
+            //                | PARSE_FLAG_LINEFEED
+            //                | (parse_flags & PARSE_FLAG_ASM_FILE));
+            //            next();
+            //            buf[0] = '\0';
+            //            while (tok != TOK_LINEFEED) {
+            //                pstrcat(buf, sizeof(buf), get_tok_str(tok, &tokc));
+            //                next();
+            //            }
+            //            len = strlen(buf);
+            //            /* check syntax and remove '<>|""' */
+            //            if ((len < 2 || ((buf[0] != '"' || buf[len-1] != '"') &&
+            //                (buf[0] != '<' || buf[len-1] != '>'))))
+            //                tcc_error("'#include' expects \"FILENAME\" or <FILENAME>");
+            //            c = buf[len-1];
+            //            memmove(buf, buf + 1, len - 2);
+            //            buf[len - 2] = '\0';
+            //        }
+
+            //        if (s1->include_stack_ptr >= s1->include_stack + INCLUDE_STACK_SIZE)
+            //            tcc_error("#include recursion too deep");
+            //        /* store current file in stack, but increment stack later below */
+            //        *s1->include_stack_ptr = file;
+            //        i = tok == TOK_INCLUDE_NEXT ? file->include_next_index : 0;
+            //        n = 2 + s1->nb_include_paths + s1->nb_sysinclude_paths;
+            //        for (; i < n; ++i) {
+            //            char buf1[sizeof file->filename];
+            //            CachedInclude *e;
+            //            const char *path;
+
+            //            if (i == 0) {
+            //                /* check absolute include path */
+            //                if (!IS_ABSPATH(buf))
+            //                    continue;
+            //                buf1[0] = 0;
+
+            //            } else if (i == 1) {
+            //                /* search in file's dir if "header.h" */
+            //                if (c != '\"')
+            //                    continue;
+            //                /* https://savannah.nongnu.org/bugs/index.php?50847 */
+            //                path = file->true_filename;
+            //                pstrncpy(buf1, path, tcc_basename(path) - path);
+
+            //            } else {
+            //                /* search in all the include paths */
+            //                int j = i - 2, k = j - s1->nb_include_paths;
+            //                path = k < 0 ? s1->include_paths[j] : s1->sysinclude_paths[k];
+            //                pstrcpy(buf1, sizeof(buf1), path);
+            //                pstrcat(buf1, sizeof(buf1), "/");
+            //            }
+
+            //            pstrcat(buf1, sizeof(buf1), buf);
+            //            e = search_cached_include(s1, buf1, 0);
+            //            if (e && (define_find(e->ifndef_macro) || e->once == pp_once)) {
+            //                /* no need to parse the include because the 'ifndef macro'
+            //                is defined (or had #pragma once) */
+            //#ifdef INC_DEBUG
+            //                printf("%s: skipping cached %s\n", file->filename, buf1);
+            //#endif
+            //                goto include_done;
+            //            }
+
+            //            if (tcc_open(s1, buf1) < 0)
+            //                continue;
+
+            //            file->include_next_index = i + 1;
+            //#ifdef INC_DEBUG
+            //            printf("%s: including %s\n", file->prev->filename, file->filename);
+            //#endif
+            //            /* update target deps */
+            //            dynarray_add(&s1->target_deps, &s1->nb_target_deps,
+            //                tcc_strdup(buf1));
+            //            /* push current file in stack */
+            //            ++s1->include_stack_ptr;
+            //            /* add include file debug info */
+            //            if (s1->do_debug)
+            //                put_stabs(file->filename, N_BINCL, 0, 0, 0);
+            //            tok_flags |= TOK_FLAG_BOF | TOK_FLAG_BOL;
+            //            ch = file->buf_ptr[0];
+            //            goto the_end;
+            //        }
+            //        tcc_error("include file '%s' not found", buf);
+            //include_done:
+            //        break;
+            //    case TOK_IFNDEF:
+            //        c = 1;
+            //        goto do_ifdef;
+            //    case TOK_IF:
+            //        c = expr_preprocess();
+            //        goto do_if;
+            //    case TOK_IFDEF:
+            //        c = 0;
+            //do_ifdef:
+            //        next_nomacro();
+            //        if (tok < TOK_IDENT)
+            //            tcc_error("invalid argument for '#if%sdef'", c ? "n" : "");
+            //        if (is_bof) {
+            //            if (c) {
+            //#ifdef INC_DEBUG
+            //                printf("#ifndef %s\n", get_tok_str(tok, NULL));
+            //#endif
+            //                file->ifndef_macro = tok;
+            //            }
+            //        }
+            //        c = (define_find(tok) != 0) ^ c;
+            //do_if:
+            //        if (s1->ifdef_stack_ptr >= s1->ifdef_stack + IFDEF_STACK_SIZE)
+            //            tcc_error("memory full (ifdef)");
+            //        *s1->ifdef_stack_ptr++ = c;
+            //        goto test_skip;
+            //    case TOK_ELSE:
+            //        if (s1->ifdef_stack_ptr == s1->ifdef_stack)
+            //            tcc_error("#else without matching #if");
+            //        if (s1->ifdef_stack_ptr[-1] & 2)
+            //            tcc_error("#else after #else");
+            //        c = (s1->ifdef_stack_ptr[-1] ^= 3);
+            //        goto test_else;
+            //    case TOK_ELIF:
+            //        if (s1->ifdef_stack_ptr == s1->ifdef_stack)
+            //            tcc_error("#elif without matching #if");
+            //        c = s1->ifdef_stack_ptr[-1];
+            //        if (c > 1)
+            //            tcc_error("#elif after #else");
+            //        /* last #if/#elif expression was true: we skip */
+            //        if (c == 1) {
+            //            c = 0;
+            //        } else {
+            //            c = expr_preprocess();
+            //            s1->ifdef_stack_ptr[-1] = c;
+            //        }
+            //test_else:
+            //        if (s1->ifdef_stack_ptr == file->ifdef_stack_ptr + 1)
+            //            file->ifndef_macro = 0;
+            //test_skip:
+            //        if (!(c & 1)) {
+            //            preprocess_skip();
+            //            is_bof = 0;
+            //            goto redo;
+            //        }
+            //        break;
+            //    case TOK_ENDIF:
+            //        if (s1->ifdef_stack_ptr <= file->ifdef_stack_ptr)
+            //            tcc_error("#endif without matching #if");
+            //        s1->ifdef_stack_ptr--;
+            //        /* '#ifndef macro' was at the start of file. Now we check if
+            //        an '#endif' is exactly at the end of file */
+            //        if (file->ifndef_macro &&
+            //            s1->ifdef_stack_ptr == file->ifdef_stack_ptr) {
+            //                file->ifndef_macro_saved = file->ifndef_macro;
+            //                /* need to set to zero to avoid false matches if another
+            //                #ifndef at middle of file */
+            //                file->ifndef_macro = 0;
+            //                while (tok != TOK_LINEFEED)
+            //                    next_nomacro();
+            //                tok_flags |= TOK_FLAG_ENDIF;
+            //                goto the_end;
+            //        }
+            //        break;
+            //    case TOK_PPNUM:
+            //        n = strtoul((char*)tokc.str.data, &q, 10);
+            //        goto _line_num;
+            //    case TOK_LINE:
+            //        next();
+            //        if (tok != TOK_CINT)
+            //_line_err:
+            //        tcc_error("wrong #line format");
+            //        n = tokc.i;
+            //_line_num:
+            //        next();
+            //        if (tok != TOK_LINEFEED) {
+            //            if (tok == TOK_STR) {
+            //                if (file->true_filename == file->filename)
+            //                    file->true_filename = tcc_strdup(file->filename);
+            //                pstrcpy(file->filename, sizeof(file->filename), (char *)tokc.str.data);
+            //            } else if (parse_flags & PARSE_FLAG_ASM_FILE)
+            //                break;
+            //            else
+            //                goto _line_err;
+            //            --n;
+            //        }
+            //        if (file->fd > 0)
+            //            total_lines += file->line_num - n;
+            //        file->line_num = n;
+            //        if (s1->do_debug)
+            //            put_stabs(file->filename, N_BINCL, 0, 0, 0);
+            //        break;
+            //    case TOK_ERROR:
+            //    case TOK_WARNING:
+            //        c = tok;
+            //        ch = file->buf_ptr[0];
+            //        skip_spaces();
+            //        q = buf;
+            //        while (ch != '\n' && ch != CH_EOF) {
+            //            if ((q - buf) < sizeof(buf) - 1)
+            //                *q++ = ch;
+            //            if (ch == '\\') {
+            //                if (handle_stray_noerror() == 0)
+            //                    --q;
+            //            } else
+            //                inp();
+            //        }
+            //        *q = '\0';
+            //        if (c == TOK_ERROR)
+            //            tcc_error("#error %s", buf);
+            //        else
+            //            tcc_warning("#warning %s", buf);
+            //        break;
+            //    case TOK_PRAGMA:
+            //        pragma_parse(s1);
+            //        break;
+            //    case TOK_LINEFEED:
+            //        goto the_end;
+            //    default:
+            //        /* ignore gas line comment in an 'S' file. */
+            //        if (saved_parse_flags & PARSE_FLAG_ASM_FILE)
+            //            goto ignore;
+            //        if (tok == '!' && is_bof)
+            //            /* '!' is ignored at beginning to allow C scripts. */
+            //            goto ignore;
+            //        tcc_warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
+            //ignore:
+            //        file->buf_ptr = parse_line_comment(file->buf_ptr - 1);
+            //        goto the_end;
+            //    }
+            //    /* ignore other preprocess commands or #! for C scripts */
+            //    while (tok != TOK_LINEFEED)
+            //        next_nomacro();
+            //the_end:
+            //    parse_flags = saved_parse_flags;
+
+        }
+
+        /* evaluate escape codes in a string. */
+        private void parse_escape_string()
+        {
+            //                int c, n;
+            //    const uint8_t *p;
+
+            //    p = buf;
+            //    for(;;) {
+            //        c = *p;
+            //        if (c == '\0')
+            //            break;
+            //        if (c == '\\') {
+            //            p++;
+            //            /* escape */
+            //            c = *p;
+            //            switch(c) {
+            //            case '0': case '1': case '2': case '3':
+            //            case '4': case '5': case '6': case '7':
+            //                /* at most three octal digits */
+            //                n = c - '0';
+            //                p++;
+            //                c = *p;
+            //                if (isoct(c)) {
+            //                    n = n * 8 + c - '0';
+            //                    p++;
+            //                    c = *p;
+            //                    if (isoct(c)) {
+            //                        n = n * 8 + c - '0';
+            //                        p++;
+            //                    }
+            //                }
+            //                c = n;
+            //                goto add_char_nonext;
+            //            case 'x':
+            //            case 'u':
+            //            case 'U':
+            //                p++;
+            //                n = 0;
+            //                for(;;) {
+            //                    c = *p;
+            //                    if (c >= 'a' && c <= 'f')
+            //                        c = c - 'a' + 10;
+            //                    else if (c >= 'A' && c <= 'F')
+            //                        c = c - 'A' + 10;
+            //                    else if (isnum(c))
+            //                        c = c - '0';
+            //                    else
+            //                        break;
+            //                    n = n * 16 + c;
+            //                    p++;
+            //                }
+            //                c = n;
+            //                goto add_char_nonext;
+            //            case 'a':
+            //                c = '\a';
+            //                break;
+            //            case 'b':
+            //                c = '\b';
+            //                break;
+            //            case 'f':
+            //                c = '\f';
+            //                break;
+            //            case 'n':
+            //                c = '\n';
+            //                break;
+            //            case 'r':
+            //                c = '\r';
+            //                break;
+            //            case 't':
+            //                c = '\t';
+            //                break;
+            //            case 'v':
+            //                c = '\v';
+            //                break;
+            //            case 'e':
+            //                if (!gnu_ext)
+            //                    goto invalid_escape;
+            //                c = 27;
+            //                break;
+            //            case '\'':
+            //            case '\"':
+            //            case '\\': 
+            //            case '?':
+            //                break;
+            //            default:
+            //invalid_escape:
+            //                if (c >= '!' && c <= '~')
+            //                    tcc_warning("unknown escape sequence: \'\\%c\'", c);
+            //                else
+            //                    tcc_warning("unknown escape sequence: \'\\x%x\'", c);
+            //                break;
+            //            }
+            //        } else if (is_long && c >= 0x80) {
+            //            /* assume we are processing UTF-8 sequence */
+            //            /* reference: The Unicode Standard, Version 10.0, ch3.9 */
+
+            //            int cont; /* count of continuation bytes */
+            //            int skip; /* how many bytes should skip when error occurred */
+            //            int i;
+
+            //            /* decode leading byte */
+            //            if (c < 0xC2) {
+            //                skip = 1; goto invalid_utf8_sequence;
+            //            } else if (c <= 0xDF) {
+            //                cont = 1; n = c & 0x1f;
+            //            } else if (c <= 0xEF) {
+            //                cont = 2; n = c & 0xf;
+            //            } else if (c <= 0xF4) {
+            //                cont = 3; n = c & 0x7;
+            //            } else {
+            //                skip = 1; goto invalid_utf8_sequence;
+            //            }
+
+            //            /* decode continuation bytes */
+            //            for (i = 1; i <= cont; i++) {
+            //                int l = 0x80, h = 0xBF;
+
+            //                /* adjust limit for second byte */
+            //                if (i == 1) {
+            //                    switch (c) {
+            //                    case 0xE0: l = 0xA0; break;
+            //                    case 0xED: h = 0x9F; break;
+            //                    case 0xF0: l = 0x90; break;
+            //                    case 0xF4: h = 0x8F; break;
+            //                    }
+            //                }
+
+            //                if (p[i] < l || p[i] > h) {
+            //                    skip = i; goto invalid_utf8_sequence;
+            //                }
+
+            //                n = (n << 6) | (p[i] & 0x3f);
+            //            }
+
+            //            /* advance pointer */
+            //            p += 1 + cont;
+            //            c = n;
+            //            goto add_char_nonext;
+
+            //            /* error handling */
+            //invalid_utf8_sequence:
+            //            tcc_warning("ill-formed UTF-8 subsequence starting with: \'\\x%x\'", c);
+            //            c = 0xFFFD;
+            //            p += skip;
+            //            goto add_char_nonext;
+
+            //        }
+            //        p++;
+            //add_char_nonext:
+            //        if (!is_long)
+            //            cstr_ccat(outstr, c);
+            //        else {
+            //#ifdef TCC_TARGET_PE
+            //            /* store as UTF-16 */
+            //            if (c < 0x10000) {
+            //                cstr_wccat(outstr, c);
+            //            } else {
+            //                c -= 0x10000;
+            //                cstr_wccat(outstr, (c >> 10) + 0xD800);
+            //                cstr_wccat(outstr, (c & 0x3FF) + 0xDC00);
+            //            }
+            //#else
+            //            cstr_wccat(outstr, c);
+            //#endif
+            //        }
+            //    }
+            //    /* add a trailing '\0' */
+            //    if (!is_long)
+            //        cstr_ccat(outstr, '\0');
+            //    else
+            //        cstr_wccat(outstr, '\0');
+
+        }
+
+        private void parse_string()
+        {
+            //            uint8_t buf[1000], *p = buf;
+            //int is_long, sep;
+
+            //if ((is_long = *s == 'L'))
+            //    ++s, --len;
+            //sep = *s++;
+            //len -= 2;
+            //if (len >= sizeof buf)
+            //    p = tcc_malloc(len + 1);
+            //memcpy(p, s, len);
+            //p[len] = 0;
+
+            //cstr_reset(&tokcstr);
+            //if (p != buf)
+            //    tcc_free(p);
+
+            //if (sep == '\'') {
+            //    int char_size, i, n, c;
+            //    /* XXX: make it portable */
+            //    if (!is_long)
+            //        tok = TOK_CCHAR, char_size = 1;
+            //    else
+            //        tok = TOK_LCHAR, char_size = sizeof(nwchar_t);
+            //    n = tokcstr.size / char_size - 1;
+            //    if (n < 1)
+            //        tcc_error("empty character constant");
+            //    if (n > 1)
+            //        tcc_warning("multi-character character constant");
+            //    for (c = i = 0; i < n; ++i) {
+            //        if (is_long)
+            //            c = ((nwchar_t *)tokcstr.data)[i];
+            //        else
+            //            c = (c << 8) | ((char *)tokcstr.data)[i];
+            //    }
+            //    tokc.i = c;
+            //} else {
+            //    tokc.str.size = tokcstr.size;
+            //    tokc.str.data = tokcstr.data;
+            //    if (!is_long)
+            //        tok = TOK_STR;
+            //    else
+            //        tok = TOK_LSTR;
+            //}
+
+        }
+
+        /* bn = (bn << shift) | or_val */
+        private void bn_lshift()
+        {
+            //            int i;
+            //unsigned int v;
+            //for(i=0;i<BN_SIZE;i++) {
+            //    v = bn[i];
+            //    bn[i] = (v << shift) | or_val;
+            //    or_val = v >> (32 - shift);
+            //}
+
+        }
+
+        private void bn_zero()
+        {
+            //int i;
+
+            //for (i = 0; i < BN_SIZE; i++)
+            //{
+            //    bn[i] = 0;
+            //}
+
+        }
 
         /* parse number in null terminated string 'p' and return it in the current token */
-        public void parse_number(string p)
+        private void parse_number(string p)
         {
             int b;
             int t;
@@ -1061,7 +2762,20 @@ namespace TidePool
 
         //- scanning & macro subs -----------------------------------------------------
 
-        public void next_nomacro1()
+        //#define PARSE2(c1, tok1, c2, tok2)              \
+        //    case c1:                                    \
+        //    PEEKC(c, p);                            \
+        //    if (c == c2) {                          \
+        //    p++;                                \
+        //    tok = tok2;                         \
+        //    } else {                                \
+        //    tok = tok1;                         \
+        //    }                                       \
+        //    break;
+
+        /* return next token without macro substitution */
+        //scans input & gets next macro
+        private void next_nomacro1()
         {
             TokenSym ts = null;
             int t;
@@ -1159,10 +2873,46 @@ namespace TidePool
                     tok = (int)TPTOKEN.TOK_LINEFEED;
                     goto keep_tok_flags;
 
+                //directive
                 case '#':
+                    /* XXX: simplify */
+                    //PEEKC(c, p);
+                    //if ((tok_flags & TOK_FLAG_BOL) &&
+                    //    (parse_flags & PARSE_FLAG_PREPROCESS))
+                    //{
+                    //    file->buf_ptr = p;
+                    //    preprocess(tok_flags & TOK_FLAG_BOF);
+                    //    p = file->buf_ptr;
+                    //    goto maybe_newline;
+                    //}
+                    //else
+                    //{
+                    //    if (c == '#')
+                    //    {
+                    //        p++;
+                    //        tok = TOK_TWOSHARPS;
+                    //    }
+                    //    else
+                    //    {
+                    //        if (parse_flags & PARSE_FLAG_ASM_FILE)
+                    //        {
+                    //            p = parse_line_comment(p - 1);
+                    //            goto redo_no_start;
+                    //        }
+                    //        else
+                    //        {
+                    //            tok = '#';
+                    //        }
+                    //    }
+                    //}
+                    break;
 
                 //identifiers
+                /* dollar is allowed to start identifiers when not parsing asm */
                 case '$':
+                //                if (!(isidnum_table[c - CH_EOF] & IS_ID)
+                //|| (parse_flags & PARSE_FLAG_ASM_FILE))
+                //                    goto parse_simple;
 
                 case 'a':
                 case 'b':
@@ -1310,23 +3060,181 @@ namespace TidePool
                     break;
 
                 case '.':
+                /* special dot handling because it can also start a number */
+                //PEEKC(c, p);
+                //if (isnum(c))
+                //{
+                //    t = '.';
+                //    goto parse_num;
+                //}
+                //else if ((isidnum_table['.' - CH_EOF] & IS_ID)
+                //  && (isidnum_table[c - CH_EOF] & (IS_ID | IS_NUM)))
+                //{
+                //    *--p = c = '.';
+                //    goto parse_ident_fast;
+                //}
+                //else if (c == '.')
+                //{
+                //    PEEKC(c, p);
+                //    if (c == '.')
+                //    {
+                //        p++;
+                //        tok = TOK_DOTS;
+                //    }
+                //    else
+                //    {
+                //        *--p = '.'; /* may underflow into file->unget[] */
+                //        tok = '.';
+                //    }
+                //}
+                //else
+                //{
+                //    tok = '.';
+                //}
+                //break;
 
+                //char & string
                 case '\'':
                 case '\"':
+                //            str_const:
+                //cstr_reset(&tokcstr);
+                //if (is_long)
+                //    cstr_ccat(&tokcstr, 'L');
+                //cstr_ccat(&tokcstr, c);
+                //p = parse_pp_string(p, c, &tokcstr);
+                //cstr_ccat(&tokcstr, c);
+                //cstr_ccat(&tokcstr, '\0');
+                //tokc.str.size = tokcstr.size;
+                //tokc.str.data = tokcstr.data;
+                //tok = TOK_PPSTR;
+                //break;
 
+                //punctuation
                 case '<':
+                //                    PEEKC(c, p);
+                //if (c == '=') {
+                //    p++;
+                //    tok = TOK_LE;
+                //} else if (c == '<') {
+                //    PEEKC(c, p);
+                //    if (c == '=') {
+                //        p++;
+                //        tok = TOK_A_SHL;
+                //    } else {
+                //        tok = TOK_SHL;
+                //    }
+                //} else {
+                //    tok = TOK_LT;
+                //}
+                //break;
 
                 case '>':
+                //                    PEEKC(c, p);
+                //if (c == '=') {
+                //    p++;
+                //    tok = TOK_GE;
+                //} else if (c == '>') {
+                //    PEEKC(c, p);
+                //    if (c == '=') {
+                //        p++;
+                //        tok = TOK_A_SAR;
+                //    } else {
+                //        tok = TOK_SAR;
+                //    }
+                //} else {
+                //    tok = TOK_GT;
+                //}
+                //break;
 
                 case '&':
+                //                    PEEKC(c, p);
+                //if (c == '&') {
+                //    p++;
+                //    tok = TOK_LAND;
+                //} else if (c == '=') {
+                //    p++;
+                //    tok = TOK_A_AND;
+                //} else {
+                //    tok = '&';
+                //}
+                //break;
+
 
                 case '|':
+                //PEEKC(c, p);
+                //if (c == '|') {
+                //    p++;
+                //    tok = TOK_LOR;
+                //} else if (c == '=') {
+                //    p++;
+                //    tok = TOK_A_OR;
+                //} else {
+                //    tok = '|';
+                //}
+                //break;
 
                 case '+':
+                //                    PEEKC(c, p);
+                //if (c == '+') {
+                //    p++;
+                //    tok = TOK_INC;
+                //} else if (c == '=') {
+                //    p++;
+                //    tok = TOK_A_ADD;
+                //} else {
+                //    tok = '+';
+                //}
+                //break;
 
                 case '-':
+                //                    PEEKC(c, p);
+                //if (c == '-') {
+                //    p++;
+                //    tok = TOK_DEC;
+                //} else if (c == '=') {
+                //    p++;
+                //    tok = TOK_A_SUB;
+                //} else if (c == '>') {
+                //    p++;
+                //    tok = TOK_ARROW;
+                //} else {
+                //    tok = '-';
+                //}
+                //break;
 
+                //                PARSE2('!', '!', '=', TOK_NE)
+                //PARSE2('=', '=', '=', TOK_EQ)
+                //PARSE2('*', '*', '=', TOK_A_MUL)
+                //PARSE2('%', '%', '=', TOK_A_MOD)
+                //PARSE2('^', '^', '=', TOK_A_XOR)
+
+
+                /* comments or operator */
                 case '/':
+                    PEEKC(ref c, ref p);
+                    if (c == '*')
+                    {
+                        p = parse_comment(p);
+                        /* comments replaced by a blank */
+                        tok = ' ';
+                        goto keep_tok_flags;
+                    }
+                    else if (c == '/')
+                    {
+                        p = parse_line_comment(p);
+                        tok = ' ';
+                        goto keep_tok_flags;
+                    }
+                    else if (c == '=')
+                    {
+                        p++;
+                        tok = (int)TPTOKEN.TOK_A_DIV;
+                    }
+                    else
+                    {
+                        tok = '/';
+                    }
+                    break;
 
                 /* simple tokens */
                 case '(':
@@ -1347,6 +3255,12 @@ namespace TidePool
                     break;
 
                 default:
+                    //                    if (c >= 0x80 && c <= 0xFF) /* utf8 identifiers */
+                    //    goto parse_ident_fast;
+
+                    //if (parse_flags & PARSE_FLAG_ASM_FILE)
+                    //    goto parse_simple;
+                    //tcc_error("unrecognized character \\x%02x", c);
                     break;
 
             }
@@ -1359,7 +3273,8 @@ namespace TidePool
             Console.Out.WriteLine("token = {0} {1}", tok.ToString("X2"), get_tok_str(tok, tokc));
         }
 
-        public void next_nomacro_spc()
+        /* return next token without macro substitution. Can read input from  macro_ptr buffer */
+        private void next_nomacro_spc()
         {
             if (macro_ptr > 0)
             {
@@ -1379,7 +3294,8 @@ namespace TidePool
             }
         }
 
-        public void next_nomacro()
+        //get next token, skipping spaces
+        private void next_nomacro()
         {
             do
             {
@@ -1387,15 +3303,529 @@ namespace TidePool
             } while (tok < 256 && ((isidnum_table[tok - BufferedFile.CH_EOF] & IS_SPC) != 0));
         }
 
-        public void macro_arg_subst() { }
-        public void paste_tokens() { }
-        public void macro_twosharps() { }
-        public void next_argstream() { }
-        public void macro_subst_tok() { }
-        public void macro_subst() { }
+        /* substitute arguments in replacement lists in macro_str by the values in args (field d) and return allocated string */
+        private void macro_arg_subst()
+        {
+            //                int t, t0, t1, spc;
+            //    const int *st;
+            //    Sym *s;
+            //    CValue cval;
+            //    TokenString str;
+            //    CString cstr;
+
+            //    tok_str_new(&str);
+            //    t0 = t1 = 0;
+            //    while(1) {
+            //        TOK_GET(&t, &macro_str, &cval);
+            //        if (!t)
+            //            break;
+            //        if (t == '#') {
+            //            /* stringize */
+            //            TOK_GET(&t, &macro_str, &cval);
+            //            if (!t)
+            //                goto bad_stringy;
+            //            s = sym_find2(args, t);
+            //            if (s) {
+            //                cstr_new(&cstr);
+            //                cstr_ccat(&cstr, '\"');
+            //                st = s->d;
+            //                spc = 0;
+            //                while (*st >= 0) {
+            //                    TOK_GET(&t, &st, &cval);
+            //                    if (t != TOK_PLCHLDR
+            //                        && t != TOK_NOSUBST
+            //                        && 0 == check_space(t, &spc)) {
+            //                            const char *s = get_tok_str(t, &cval);
+            //                            while (*s) {
+            //                                if (t == TOK_PPSTR && *s != '\'')
+            //                                    add_char(&cstr, *s);
+            //                                else
+            //                                    cstr_ccat(&cstr, *s);
+            //                                ++s;
+            //                            }
+            //                    }
+            //                }
+            //                cstr.size -= spc;
+            //                cstr_ccat(&cstr, '\"');
+            //                cstr_ccat(&cstr, '\0');
+            //#ifdef PP_DEBUG
+            //                printf("\nstringize: <%s>\n", (char *)cstr.data);
+            //#endif
+            //                /* add string */
+            //                cval.str.size = cstr.size;
+            //                cval.str.data = cstr.data;
+            //                tok_str_add2(&str, TOK_PPSTR, &cval);
+            //                cstr_free(&cstr);
+            //            } else {
+            //bad_stringy:
+            //                expect("macro parameter after '#'");
+            //            }
+            //        } else if (t >= TOK_IDENT) {
+            //            s = sym_find2(args, t);
+            //            if (s) {
+            //                int l0 = str.len;
+            //                st = s->d;
+            //                /* if '##' is present before or after, no arg substitution */
+            //                if (*macro_str == TOK_PPJOIN || t1 == TOK_PPJOIN) {
+            //                    /* special case for var arg macros : ## eats the ','
+            //                    if empty VA_ARGS variable. */
+            //                    if (t1 == TOK_PPJOIN && t0 == ',' && gnu_ext && s->type.t) {
+            //                        if (*st <= 0) {
+            //                            /* suppress ',' '##' */
+            //                            str.len -= 2;
+            //                        } else {
+            //                            /* suppress '##' and add variable */
+            //                            str.len--;
+            //                            goto add_var;
+            //                        }
+            //                    }
+            //                } else {
+            //add_var:
+            //                    if (!s->next) {
+            //                        /* Expand arguments tokens and store them.  In most
+            //                        cases we could also re-expand each argument if
+            //                        used multiple times, but not if the argument
+            //                        contains the __COUNTER__ macro.  */
+            //                        TokenString str2;
+            //                        sym_push2(&s->next, s->v, s->type.t, 0);
+            //                        tok_str_new(&str2);
+            //                        macro_subst(&str2, nested_list, st);
+            //                        tok_str_add(&str2, 0);
+            //                        s->next->d = str2.str;
+            //                    }
+            //                    st = s->next->d;
+            //                }
+            //                for(;;) {
+            //                    int t2;
+            //                    TOK_GET(&t2, &st, &cval);
+            //                    if (t2 <= 0)
+            //                        break;
+            //                    tok_str_add2(&str, t2, &cval);
+            //                }
+            //                if (str.len == l0) /* expanded to empty string */
+            //                    tok_str_add(&str, TOK_PLCHLDR);
+            //            } else {
+            //                tok_str_add(&str, t);
+            //            }
+            //        } else {
+            //            tok_str_add2(&str, t, &cval);
+            //        }
+            //        t0 = t1, t1 = t;
+            //    }
+            //    tok_str_add(&str, 0);
+            //    return str.str;
+
+        }
+
+        private void paste_tokens()
+        {
+            //            CString cstr;
+            //int n, ret = 1;
+
+            //cstr_new(&cstr);
+            //if (t1 != TOK_PLCHLDR)
+            //    cstr_cat(&cstr, get_tok_str(t1, v1), -1);
+            //n = cstr.size;
+            //if (t2 != TOK_PLCHLDR)
+            //    cstr_cat(&cstr, get_tok_str(t2, v2), -1);
+            //cstr_ccat(&cstr, '\0');
+
+            //tcc_open_bf(tcc_state, ":paste:", cstr.size);
+            //memcpy(file->buffer, cstr.data, cstr.size);
+            //tok_flags = 0;
+            //for (;;) {
+            //    next_nomacro1();
+            //    if (0 == *file->buf_ptr)
+            //        break;
+            //    if (is_space(tok))
+            //        continue;
+            //    tcc_warning("pasting \"%.*s\" and \"%s\" does not give a valid"
+            //        " preprocessing token", n, cstr.data, (char*)cstr.data + n);
+            //    ret = 0;
+            //    break;
+            //}
+            //tcc_close();
+            ////printf("paste <%s>\n", (char*)cstr.data);
+            //cstr_free(&cstr);
+            //return ret;
+
+        }
+
+        /* handle the '##' operator. Return NULL if no '##' seen. Otherwise return the resulting string (which must be freed). */
+        private void macro_twosharps()
+        {
+            //            int t;
+            //CValue cval;
+            //TokenString macro_str1;
+            //int start_of_nosubsts = -1;
+            //const int *ptr;
+
+            ///* we search the first '##' */
+            //for (ptr = ptr0;;) {
+            //    TOK_GET(&t, &ptr, &cval);
+            //    if (t == TOK_PPJOIN)
+            //        break;
+            //    if (t == 0)
+            //        return NULL;
+            //}
+
+            //tok_str_new(&macro_str1);
+
+            ////tok_print(" $$$", ptr0);
+            //for (ptr = ptr0;;) {
+            //    TOK_GET(&t, &ptr, &cval);
+            //    if (t == 0)
+            //        break;
+            //    if (t == TOK_PPJOIN)
+            //        continue;
+            //    while (*ptr == TOK_PPJOIN) {
+            //        int t1; CValue cv1;
+            //        /* given 'a##b', remove nosubsts preceding 'a' */
+            //        if (start_of_nosubsts >= 0)
+            //            macro_str1.len = start_of_nosubsts;
+            //        /* given 'a##b', remove nosubsts preceding 'b' */
+            //        while ((t1 = *++ptr) == TOK_NOSUBST)
+            //            ;
+            //        if (t1 && t1 != TOK_PPJOIN) {
+            //            TOK_GET(&t1, &ptr, &cv1);
+            //            if (t != TOK_PLCHLDR || t1 != TOK_PLCHLDR) {
+            //                if (paste_tokens(t, &cval, t1, &cv1)) {
+            //                    t = tok, cval = tokc;
+            //                } else {
+            //                    tok_str_add2(&macro_str1, t, &cval);
+            //                    t = t1, cval = cv1;
+            //                }
+            //            }
+            //        }
+            //    }
+            //    if (t == TOK_NOSUBST) {
+            //        if (start_of_nosubsts < 0)
+            //            start_of_nosubsts = macro_str1.len;
+            //    } else {
+            //        start_of_nosubsts = -1;
+            //    }
+            //    tok_str_add2(&macro_str1, t, &cval);
+            //}
+            //tok_str_add(&macro_str1, 0);
+            ////tok_print(" ###", macro_str1.str);
+            //return macro_str1.str;
+
+        }
+
+        /* peek or read [ws_str == NULL] next token from function macro call, walking up macro levels up to the file if necessary */
+        private void next_argstream()
+        {
+            //            int t;
+            //const int *p;
+            //Sym *sa;
+
+            //for (;;) {
+            //    if (macro_ptr) {
+            //        p = macro_ptr, t = *p;
+            //        if (ws_str) {
+            //            while (is_space(t) || TOK_LINEFEED == t || TOK_PLCHLDR == t)
+            //                tok_str_add(ws_str, t), t = *++p;
+            //        }
+            //        if (t == 0) {
+            //            end_macro();
+            //            /* also, end of scope for nested defined symbol */
+            //            sa = *nested_list;
+            //            while (sa && sa->v == 0)
+            //                sa = sa->prev;
+            //            if (sa)
+            //                sa->v = 0;
+            //            continue;
+            //        }
+            //    } else {
+            //        ch = handle_eob();
+            //        if (ws_str) {
+            //            while (is_space(ch) || ch == '\n' || ch == '/') {
+            //                if (ch == '/') {
+            //                    int c;
+            //                    uint8_t *p = file->buf_ptr;
+            //                    PEEKC(c, p);
+            //                    if (c == '*') {
+            //                        p = parse_comment(p);
+            //                        file->buf_ptr = p - 1;
+            //                    } else if (c == '/') {
+            //                        p = parse_line_comment(p);
+            //                        file->buf_ptr = p - 1;
+            //                    } else
+            //                        break;
+            //                    ch = ' ';
+            //                }
+            //                if (ch == '\n')
+            //                    file->line_num++;
+            //                if (!(ch == '\f' || ch == '\v' || ch == '\r'))
+            //                    tok_str_add(ws_str, ch);
+            //                cinp();
+            //            }
+            //        }
+            //        t = ch;
+            //    }
+
+            //    if (ws_str)
+            //        return t;
+            //    next_nomacro_spc();
+            //    return tok;
+            //}
+
+        }
+
+        /* do macro substitution of current token with macro 's' and add
+result to (tok_str,tok_len). 'nested_list' is the list of all
+macros we got inside to avoid recursing. Return non zero if no
+substitution needs to be done */
+        private void macro_subst_tok()
+        {
+            //                Sym *args, *sa, *sa1;
+            //    int parlevel, t, t1, spc;
+            //    TokenString str;
+            //    char *cstrval;
+            //    CValue cval;
+            //    CString cstr;
+            //    char buf[32];
+
+            //    /* if symbol is a macro, prepare substitution */
+            //    /* special macros */
+            //    if (tok == TOK___LINE__ || tok == TOK___COUNTER__) {
+            //        t = tok == TOK___LINE__ ? file->line_num : pp_counter++;
+            //        snprintf(buf, sizeof(buf), "%d", t);
+            //        cstrval = buf;
+            //        t1 = TOK_PPNUM;
+            //        goto add_cstr1;
+            //    } else if (tok == TOK___FILE__) {
+            //        cstrval = file->filename;
+            //        goto add_cstr;
+            //    } else if (tok == TOK___DATE__ || tok == TOK___TIME__) {
+            //        time_t ti;
+            //        struct tm *tm;
+
+            //        time(&ti);
+            //        tm = localtime(&ti);
+            //        if (tok == TOK___DATE__) {
+            //            snprintf(buf, sizeof(buf), "%s %2d %d", 
+            //                ab_month_name[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
+            //        } else {
+            //            snprintf(buf, sizeof(buf), "%02d:%02d:%02d", 
+            //                tm->tm_hour, tm->tm_min, tm->tm_sec);
+            //        }
+            //        cstrval = buf;
+            //add_cstr:
+            //        t1 = TOK_STR;
+            //add_cstr1:
+            //        cstr_new(&cstr);
+            //        cstr_cat(&cstr, cstrval, 0);
+            //        cval.str.size = cstr.size;
+            //        cval.str.data = cstr.data;
+            //        tok_str_add2(tok_str, t1, &cval);
+            //        cstr_free(&cstr);
+            //    } else if (s->d) {
+            //        int saved_parse_flags = parse_flags;
+            //        int *joined_str = NULL;
+            //        int *mstr = s->d;
+
+            //        if (s->type.t == MACRO_FUNC) {
+            //            /* whitespace between macro name and argument list */
+            //            TokenString ws_str;
+            //            tok_str_new(&ws_str);
+
+            //            spc = 0;
+            //            parse_flags |= PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED
+            //                | PARSE_FLAG_ACCEPT_STRAYS;
+
+            //            /* get next token from argument stream */
+            //            t = next_argstream(nested_list, &ws_str);
+            //            if (t != '(') {
+            //                /* not a macro substitution after all, restore the
+            //                * macro token plus all whitespace we've read.
+            //                * whitespace is intentionally not merged to preserve
+            //                * newlines. */
+            //                parse_flags = saved_parse_flags;
+            //                tok_str_add(tok_str, tok);
+            //                if (parse_flags & PARSE_FLAG_SPACES) {
+            //                    int i;
+            //                    for (i = 0; i < ws_str.len; i++)
+            //                        tok_str_add(tok_str, ws_str.str[i]);
+            //                }
+            //                tok_str_free_str(ws_str.str);
+            //                return 0;
+            //            } else {
+            //                tok_str_free_str(ws_str.str);
+            //            }
+            //            do {
+            //                next_nomacro(); /* eat '(' */
+            //            } while (tok == TOK_PLCHLDR);
+
+            //            /* argument macro */
+            //            args = NULL;
+            //            sa = s->next;
+            //            /* NOTE: empty args are allowed, except if no args */
+            //            for(;;) {
+            //                do {
+            //                    next_argstream(nested_list, NULL);
+            //                } while (is_space(tok) || TOK_LINEFEED == tok);
+            //empty_arg:
+            //                /* handle '()' case */
+            //                if (!args && !sa && tok == ')')
+            //                    break;
+            //                if (!sa)
+            //                    tcc_error("macro '%s' used with too many args",
+            //                    get_tok_str(s->v, 0));
+            //                tok_str_new(&str);
+            //                parlevel = spc = 0;
+            //                /* NOTE: non zero sa->t indicates VA_ARGS */
+            //                while ((parlevel > 0 || 
+            //                    (tok != ')' && 
+            //                    (tok != ',' || sa->type.t)))) {
+            //                        if (tok == TOK_EOF || tok == 0)
+            //                            break;
+            //                        if (tok == '(')
+            //                            parlevel++;
+            //                        else if (tok == ')')
+            //                            parlevel--;
+            //                        if (tok == TOK_LINEFEED)
+            //                            tok = ' ';
+            //                        if (!check_space(tok, &spc))
+            //                            tok_str_add2(&str, tok, &tokc);
+            //                        next_argstream(nested_list, NULL);
+            //                }
+            //                if (parlevel)
+            //                    expect(")");
+            //                str.len -= spc;
+            //                tok_str_add(&str, -1);
+            //                tok_str_add(&str, 0);
+            //                sa1 = sym_push2(&args, sa->v & ~SYM_FIELD, sa->type.t, 0);
+            //                sa1->d = str.str;
+            //                sa = sa->next;
+            //                if (tok == ')') {
+            //                    /* special case for gcc var args: add an empty
+            //                    var arg argument if it is omitted */
+            //                    if (sa && sa->type.t && gnu_ext)
+            //                        goto empty_arg;
+            //                    break;
+            //                }
+            //                if (tok != ',')
+            //                    expect(",");
+            //            }
+            //            if (sa) {
+            //                tcc_error("macro '%s' used with too few args",
+            //                    get_tok_str(s->v, 0));
+            //            }
+
+            //            parse_flags = saved_parse_flags;
+
+            //            /* now subst each arg */
+            //            mstr = macro_arg_subst(nested_list, mstr, args);
+            //            /* free memory */
+            //            sa = args;
+            //            while (sa) {
+            //                sa1 = sa->prev;
+            //                tok_str_free_str(sa->d);
+            //                if (sa->next) {
+            //                    tok_str_free_str(sa->next->d);
+            //                    sym_free(sa->next);
+            //                }
+            //                sym_free(sa);
+            //                sa = sa1;
+            //            }
+            //        }
+
+            //        sym_push2(nested_list, s->v, 0, 0);
+            //        parse_flags = saved_parse_flags;
+            //        joined_str = macro_twosharps(mstr);
+            //        macro_subst(tok_str, nested_list, joined_str ? joined_str : mstr);
+
+            //        /* pop nested defined symbol */
+            //        sa1 = *nested_list;
+            //        *nested_list = sa1->prev;
+            //        sym_free(sa1);
+            //        if (joined_str)
+            //            tok_str_free_str(joined_str);
+            //        if (mstr != s->d)
+            //            tok_str_free_str(mstr);
+            //    }
+            //    return 0;
+
+        }
+
+        /* do macro substitution of macro_str and add result to
+(tok_str,tok_len). 'nested_list' is the list of all macros we got inside to avoid recursing. */
+        private void macro_subst()
+        {
+            //Sym* s;
+            //int t, spc, nosubst;
+            //CValue cval;
+
+            //spc = nosubst = 0;
+
+            //while (1)
+            //{
+            //    TOK_GET(&t, &macro_str, &cval);
+            //    if (t <= 0)
+            //        break;
+
+            //    if (t >= TOK_IDENT && 0 == nosubst)
+            //    {
+            //        s = define_find(t);
+            //        if (s == NULL)
+            //            goto no_subst;
+
+            //        /* if nested substitution, do nothing */
+            //        if (sym_find2(*nested_list, t))
+            //        {
+            //            /* and mark it as TOK_NOSUBST, so it doesn't get subst'd again */
+            //            tok_str_add2(tok_str, TOK_NOSUBST, NULL);
+            //            goto no_subst;
+            //        }
+
+            //        {
+            //            TokenString str;
+            //            str.str = (int*)macro_str;
+            //            begin_macro(&str, 2);
+
+            //            tok = t;
+            //            macro_subst_tok(tok_str, nested_list, s);
+
+            //            if (str.alloc == 3)
+            //            {
+            //                /* already finished by reading function macro arguments */
+            //                break;
+            //            }
+
+            //            macro_str = macro_ptr;
+            //            end_macro();
+            //        }
+            //        if (tok_str->len)
+            //            spc = is_space(t = tok_str->str[tok_str->lastlen]);
+            //    }
+            //    else
+            //    {
+            //        if (t == '\\' && !(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
+            //            tcc_error("stray '\\' in program");
+            //    no_subst:
+            //        if (!check_space(t, &spc))
+            //            tok_str_add2(tok_str, t, &cval);
+
+            //        if (nosubst)
+            //        {
+            //            if (nosubst > 1 && (spc || (++nosubst == 3 && t == '(')))
+            //                continue;
+            //            nosubst = 0;
+            //        }
+            //        if (t == TOK_NOSUBST)
+            //            nosubst = 1;
+            //    }
+            //    /* GCC supports 'defined' as result of a macro substitution */
+            //    if (t == TOK_DEFINED && pp_expr)
+            //        nosubst = 2;
+            //}
+
+        }
 
         public void next()
         {
+            tokc = new CValue();
             if ((parseFlags & PARSE_FLAG_SPACES) != 0)
             {
                 next_nomacro_spc();
@@ -1441,7 +3871,16 @@ namespace TidePool
             }
         }
 
-        public void unget_tok() { }
+        /* push back current token and set current token to 'last_tok'. Only
+identifier case handled for labels. */
+        public void unget_tok()
+        {
+            //TokenString* str = tok_str_alloc();
+            //tok_str_add2(str, tok, &tokc);
+            //tok_str_add(str, 0);
+            //begin_macro(str, 1);
+            //tok = last_tok;
+        }
 
         //---------------------------------------------------------------------
 
@@ -1498,25 +3937,178 @@ namespace TidePool
             tokenFlags = TOK_FLAG_BOL | TOK_FLAG_BOF;
         }
 
-        public void preprocess_end() { }
-
-        public void pp_delete() { }
-        public void tok_print() { }
-
-        public void pp_line(BufferedFile f, int level)
+        /* cleanup from error/setjmp */
+        public void preprocess_end()
         {
+            //while (macro_stack)
+            //    end_macro();
+            //macro_ptr = NULL;
         }
 
-        public void define_print() { }
-        public void pp_debug_defines() { }
-        public void pp_debug_builtins() { }
-        public void pp_need_space() { }
-        public void pp_check_he0xE() { }
+        private void pp_delete()
+        {
+            //int i, n;
 
+            ///* free -D and compiler defines */
+            //free_defines(NULL);
+
+            ///* free tokens */
+            //n = tok_ident - TOK_IDENT;
+            //for (i = 0; i < n; i++)
+            //    tal_free(toksym_alloc, table_ident[i]);
+            //tcc_free(table_ident);
+            //table_ident = NULL;
+
+            ///* free static buffers */
+            //cstr_free(&tokcstr);
+            //cstr_free(&cstr_buf);
+            //cstr_free(&macro_equal_buf);
+            //tok_str_free_str(tokstr_buf.str);
+
+            ///* free allocators */
+            //tal_delete(toksym_alloc);
+            //toksym_alloc = NULL;
+            //tal_delete(tokstr_alloc);
+            //tokstr_alloc = NULL;
+            //tal_delete(cstr_alloc);
+            //cstr_alloc = NULL;
+
+        }
+
+        /* ------------------------------------------------------------------------- */
+        /* tcc -E [-P[1]] [-dD} support */
+
+        private void tok_print()
+        {
+            //            FILE *fp;
+            //int t, s = 0;
+            //CValue cval;
+
+            //fp = tcc_state->ppfp;
+            //fprintf(fp, "%s", msg);
+            //while (str) {
+            //    TOK_GET(&t, &str, &cval);
+            //    if (!t)
+            //        break;
+            //    fprintf(fp, " %s" + s, get_tok_str(t, &cval)), s = 1;
+            //}
+            //fprintf(fp, "\n");
+        }
+
+        //print #line directive
+        private void pp_line(BufferedFile f, int level)
+        {
+            //int d = f->line_num - f->line_ref;
+
+            //if (s1->dflag & 4)
+            //    return;
+
+            //if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE) {
+            //    ;
+            //} else if (level == 0 && f->line_ref && d < 8) {
+            //    while (d > 0)
+            //        fputs("\n", s1->ppfp), --d;
+            //} else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
+            //    fprintf(s1->ppfp, "#line %d \"%s\"\n", f->line_num, f->filename);
+            //} else {
+            //    fprintf(s1->ppfp, "# %d \"%s\"%s\n", f->line_num, f->filename, level > 0 ? " 1" : level < 0 ? " 2" : "");
+            //}
+            //f->line_ref = f->line_num;
+        }
+
+        private void define_print()
+        {
+            //FILE* fp;
+            //Sym* s;
+
+            //s = define_find(v);
+            //if (NULL == s || NULL == s->d)
+            //    return;
+
+            //fp = s1->ppfp;
+            //fprintf(fp, "#define %s", get_tok_str(v, NULL));
+            //if (s->type.t == MACRO_FUNC)
+            //{
+            //    Sym* a = s->next;
+            //    fprintf(fp, "(");
+            //    if (a)
+            //        for (; ; )
+            //        {
+            //            fprintf(fp, "%s", get_tok_str(a->v & ~SYM_FIELD, NULL));
+            //            if (!(a = a->next))
+            //                break;
+            //            fprintf(fp, ",");
+            //        }
+            //    fprintf(fp, ")");
+            //}
+            //tok_print("", s->d);
+
+        }
+
+        private void pp_debug_defines()
+        {
+            //            int v, t;
+            //const char *vs;
+            //FILE *fp;
+
+            //t = pp_debug_tok;
+            //if (t == 0)
+            //    return;
+
+            //file->line_num--;
+            //pp_line(s1, file, 0);
+            //file->line_ref = ++file->line_num;
+
+            //fp = s1->ppfp;
+            //v = pp_debug_symv;
+            //vs = get_tok_str(v, NULL);
+            //if (t == TOK_DEFINE) {
+            //    define_print(s1, v);
+            //} else if (t == TOK_UNDEF) {
+            //    fprintf(fp, "#undef %s\n", vs);
+            //} else if (t == TOK_push_macro) {
+            //    fprintf(fp, "#pragma push_macro(\"%s\")\n", vs);
+            //} else if (t == TOK_pop_macro) {
+            //    fprintf(fp, "#pragma pop_macro(\"%s\")\n", vs);
+            //}
+            //pp_debug_tok = 0;
+
+        }
+
+        private void pp_debug_builtins()
+        {
+            //int v;
+            //for (v = TOK_IDENT; v < tok_ident; ++v)
+            //    define_print(s1, v);
+        }
+
+        /* Add a space between tokens a and b to avoid unwanted textual pasting */
+        private void pp_need_space()
+        {
+            //return 'E' == a ? '+' == b || '-' == b
+            //    : '+' == a ? TOK_INC == b || '+' == b
+            //    : '-' == a ? TOK_DEC == b || '-' == b
+            //    : a >= TOK_IDENT ? b >= TOK_IDENT
+            //    : a == TOK_PPNUM ? b >= TOK_IDENT
+            //    : 0;
+
+        }
+
+        /* maybe hex like 0x1e */
+        private void pp_check_he0xE()
+        {
+            //if (t == TOK_PPNUM && toup(strchr(p, 0)[-1]) == 'E')
+            //    return 'E';
+            //return t;
+        }
+
+        /* Preprocess the current file */
         public int tp_preprocess()
         {
             //                BufferedFile **iptr;
-            //    int token_seen, spcs, level;
+            int token_seen;
+            int spcs;
+            int level;
             //    const char *p;
             //    char white[400];
 
@@ -1533,19 +4125,14 @@ namespace TidePool
             //    if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_P10)
             //        parse_flags |= PARSE_FLAG_TOK_NUM, s1->Pflag = 1;
 
-            //#ifdef PP_BENCH
-            //    /* for PP benchmarks */
-            //    do next(); while (tok != TOK_EOF);
-            //    return 0;
-            //#endif
+            if ((tp.dflag & 1) != 0)
+            {
+                pp_debug_builtins();
+                tp.dflag &= ~1;
+            }
 
-            //    if (s1->dflag & 1) {
-            //        pp_debug_builtins(s1);
-            //        s1->dflag &= ~1;
-            //    }
-
-
-            //    token_seen = TOK_LINEFEED, spcs = 0;
+            token_seen = (int)TPTOKEN.TOK_LINEFEED;
+            spcs = 0;
             for (; ; )
             {
                 //        iptr = s1->include_stack_ptr;
@@ -1669,16 +4256,6 @@ namespace TidePool
         public ulong i;         //8 bytes
         public string str;
         public int[] tab;
-
-        public CValue(CValue that)
-        {
-            this.ld = that.ld;
-            this.d = that.d;
-            this.f = that.f;
-            this.i = that.i;
-            this.str = String.Copy(that.str);
-            this.tab = (int[])that.tab.Clone();
-        }
     }
 }
 
