@@ -23,235 +23,6 @@ using System.IO;
 
 namespace TidePool
 {
-    public enum TPTOKEN
-    {
-        TOK_ULT = 0x92,
-        TOK_UGE = 0x93,
-        TOK_EQ = 0x94,
-        TOK_NE = 0x95,
-        TOK_ULE = 0x96,
-        TOK_UGT = 0x97,
-        TOK_Nset = 0x98,
-        TOK_Nclear = 0x99,
-        TOK_LT = 0x9c,
-        TOK_GE = 0x9d,
-        TOK_LE = 0x9e,
-        TOK_GT = 0x9f,
-
-        TOK_LAND = 0xa0,
-        TOK_LOR = 0xa1,
-        TOK_DEC = 0xa2,
-        TOK_MID = 0xa3,/* inc/dec, to void constant */
-        TOK_INC = 0xa4,
-        TOK_UDIV = 0xb0,/* unsigned division */
-        TOK_UMOD = 0xb1, /* unsigned modulo */
-        TOK_PDIV = 0xb2, /* fast division with undefined rounding for pointers */
-
-        TOK_CCHAR = 0xb3,           /* char constant in tokc */
-        TOK_LCHAR = 0xb4,
-        TOK_CINT = 0xb5,            /* number in tokc */
-        TOK_CUINT = 0xb6,           /* unsigned int constant */
-        TOK_CLLONG = 0xb7,          /* long long constant */
-        TOK_CULLONG = 0xb8,         /* unsigned long long constant */
-        TOK_STR = 0xb9,             /* pointer to string in tokc */
-        TOK_LSTR = 0xba,
-        TOK_CFLOAT = 0xbb,          /* float constant */
-        TOK_CDOUBLE = 0xbc,         /* double constant */
-        TOK_CLDOUBLE = 0xbd,        /* long double constant */
-        TOK_PPNUM = 0xbe,           /* preprocessor number */
-        TOK_PPSTR = 0xbf,           /* preprocessor string */
-        TOK_LINENUM = 0xc0,         /* line number info */
-        TOK_TWODOTS = 0xa8,         /* C++ token ? */
-
-        TOK_UMULL = 0xc2,           /* unsigned 32x32 -> 64 mul */
-        TOK_ADDC1 = 0xc3,           /* add with carry generation */
-        TOK_ADDC2 = 0xc4,           /* add with carry use */
-        TOK_SUBC1 = 0xc5,           /* add with carry generation */
-        TOK_SUBC2 = 0xc6,           /* add with carry use */
-        TOK_ARROW = 0xc7,
-        TOK_DOTS = 0xc8,            /* three dots */
-        TOK_SHR = 0xc9,             /* unsigned shift right */
-        TOK_TWOSHARPS = 0xca,       /* ## preprocessing token */
-        TOK_PLCHLDR = 0xcb,         /* placeholder token as defined in C99 */
-        TOK_NOSUBST = 0xcc,         /* means following token has already been pp'd */
-        TOK_PPJOIN = 0xcd,          /* A '##' in the right position to mean pasting */
-        TOK_CLONG = 0xce,           /* long constant */
-        TOK_CULONG = 0xcf,          /* unsigned long constant */
-
-        TOK_SHL = 0x01,             /* shift left */
-        TOK_SAR = 0x02,             /* signed shift right */
-
-        /* assignment operators : normal operator or 0x80 */
-        TOK_A_MOD = 0xa5,
-        TOK_A_AND = 0xa6,
-        TOK_A_MUL = 0xaa,
-        TOK_A_ADD = 0xab,
-        TOK_A_SUB = 0xad,
-        TOK_A_DIV = 0xaf,
-        TOK_A_XOR = 0xde,
-        TOK_A_OR = 0xfc,
-        TOK_A_SHL = 0x81,
-        TOK_A_SAR = 0x82,
-
-        TOK_EOF = -1,
-        TOK_LINEFEED = 10,             /* line feed */
-
-        TOK_LAST = 255,
-        TOK_IDENT = 256,
-
-        TOK_INT = 256,
-        TOK_VOID,
-        TOK_CHAR,
-        TOK_IF,
-        TOK_ELSE,
-        TOK_WHILE,
-        TOK_BREAK,
-        TOK_RETURN,
-        TOK_FOR,
-        TOK_EXTERN,
-        TOK_STATIC,
-        TOK_UNSIGNED,
-        TOK_GOTO,
-        TOK_DO,
-        TOK_CONTINUE,
-        TOK_SWITCH,
-        TOK_CASE,
-
-        TOK_CONST1,
-        TOK_CONST2, /* gcc keyword */
-        TOK_CONST3, /* gcc keyword */
-        TOK_VOLATILE1,
-        TOK_VOLATILE2, /* gcc keyword */
-        TOK_VOLATILE3, /* gcc keyword */
-        TOK_LONG,
-        TOK_REGISTER,
-        TOK_SIGNED1,
-        TOK_SIGNED2, /* gcc keyword */
-        TOK_SIGNED3, /* gcc keyword */
-        TOK_AUTO,
-        TOK_INLINE1,
-        TOK_INLINE2, /* gcc keyword */
-        TOK_INLINE3, /* gcc keyword */
-        TOK_RESTRICT1,
-        TOK_RESTRICT2,
-        TOK_RESTRICT3,
-        TOK_EXTENSION, /* gcc keyword */
-
-        TOK_GENERIC,
-
-        TOK_FLOAT,
-        TOK_DOUBLE,
-        TOK_BOOL,
-        TOK_SHORT,
-        TOK_STRUCT,
-        TOK_UNION,
-        TOK_TYPEDEF,
-        TOK_DEFAULT,
-        TOK_ENUM,
-        TOK_SIZEOF,
-        TOK_ATTRIBUTE1,
-        TOK_ATTRIBUTE2,
-        TOK_ALIGNOF1,
-        TOK_ALIGNOF2,
-        TOK_TYPEOF1,
-        TOK_TYPEOF2,
-        TOK_TYPEOF3,
-        TOK_LABEL,
-        TOK_ASM1,
-        TOK_ASM2,
-        TOK_ASM3,
-
-
-        /*********************************************************************/
-        /* the following are not keywords. They are included to ease parsing */
-        /* preprocessor only */
-        TOK_DEFINE,
-        TOK_UIDENT = TOK_DEFINE,
-        TOK_INCLUDE,
-        TOK_INCLUDE_NEXT,
-        TOK_IFDEF,
-        TOK_IFNDEF,
-        TOK_ELIF,
-        TOK_ENDIF,
-        TOK_DEFINED,
-        TOK_UNDEF,
-        TOK_ERROR,
-        TOK_WARNING,
-        TOK_LINE,
-        TOK_PRAGMA,
-        TOK___LINE__,
-        TOK___FILE__,
-        TOK___DATE__,
-        TOK___TIME__,
-        TOK___FUNCTION__,
-        TOK___VA_ARGS__,
-        TOK___COUNTER__,
-
-        /* special identifiers */
-        TOK___FUNC__,
-
-        /* special floating point values */
-        TOK___NAN__,
-        TOK___SNAN__,
-        TOK___INF__,
-
-        /* attribute identifiers */
-        /* XXX: handle all tokens generically since speed is not critical */
-        TOK_SECTION1,
-        TOK_SECTION2,
-        TOK_ALIGNED1,
-        TOK_ALIGNED2,
-        TOK_PACKED1,
-        TOK_PACKED2,
-        TOK_WEAK1,
-        TOK_WEAK2,
-        TOK_ALIAS1,
-        TOK_ALIAS2,
-        TOK_UNUSED1,
-        TOK_UNUSED2,
-        TOK_CDECL1,
-        TOK_CDECL2,
-        TOK_CDECL3,
-        TOK_STDCALL1,
-        TOK_STDCALL2,
-        TOK_STDCALL3,
-        TOK_FASTCALL1,
-        TOK_FASTCALL2,
-        TOK_FASTCALL3,
-        TOK_REGPARM1,
-        TOK_REGPARM2,
-
-        TOK_MODE,
-        TOK_MODE_QI,
-        TOK_MODE_DI,
-        TOK_MODE_HI,
-        TOK_MODE_SI,
-        TOK_MODE_word,
-
-        TOK_DLLEXPORT,
-        TOK_DLLIMPORT,
-        TOK_NORETURN1,
-        TOK_NORETURN2,
-        TOK_VISIBILITY1,
-        TOK_VISIBILITY2,
-
-        TOK_builtin_types_compatible_p,
-        TOK_builtin_choose_expr,
-        TOK_builtin_constant_p,
-        TOK_builtin_frame_address,
-        TOK_builtin_return_address,
-        TOK_builtin_expect,
-
-        /* pragma */
-        TOK_pack,
-        TOK_comment,
-        TOK_lib,
-        TOK_push_macro,
-        TOK_pop_macro,
-        TOK_once,
-        TOK_option
-    }
-
     public class Preprocessor
     {
 
@@ -361,6 +132,7 @@ namespace TidePool
 
         //---------------------------------------------------------------------
 
+        //tccpp_new
         public Preprocessor(TidePool _tp)
         {
             tp = _tp;
@@ -580,10 +352,7 @@ namespace TidePool
                     }
                     else
                     {
-                        p = "L\'";
-                        //            len = (cv->str.size / sizeof(nwchar_t)) - 1;
-                        //            for(i=0;i<len;i++)
-                        //                add_char(&cstr_buf, ((nwchar_t *)cv->str.data)[i]);
+                        p = "L\'" + cv.str;
                     }
                     p = p + "\'";
                     break;
@@ -1886,7 +1655,7 @@ undefined. Define symbols if '&&label' was used. */
         }
 
         /* is_bof is true if first non space token at beginning of file */
-        private void preprocess()
+        private void preprocess(int is_bof)
         {
             //                TCCState *s1 = tcc_state;
             //    int i, c, n, saved_parse_flags;
@@ -2876,35 +2645,34 @@ undefined. Define symbols if '&&label' was used. */
                 //directive
                 case '#':
                     /* XXX: simplify */
-                    //PEEKC(c, p);
-                    //if ((tok_flags & TOK_FLAG_BOL) &&
-                    //    (parse_flags & PARSE_FLAG_PREPROCESS))
-                    //{
-                    //    file->buf_ptr = p;
-                    //    preprocess(tok_flags & TOK_FLAG_BOF);
-                    //    p = file->buf_ptr;
-                    //    goto maybe_newline;
-                    //}
-                    //else
-                    //{
-                    //    if (c == '#')
-                    //    {
-                    //        p++;
-                    //        tok = TOK_TWOSHARPS;
-                    //    }
-                    //    else
-                    //    {
-                    //        if (parse_flags & PARSE_FLAG_ASM_FILE)
-                    //        {
-                    //            p = parse_line_comment(p - 1);
-                    //            goto redo_no_start;
-                    //        }
-                    //        else
-                    //        {
-                    //            tok = '#';
-                    //        }
-                    //    }
-                    //}
+                    PEEKC(ref c, ref p);
+                    if (((tokenFlags & TOK_FLAG_BOL) != 0) && ((parseFlags & PARSE_FLAG_PREPROCESS) != 0))
+                    {
+                        curFile.buf_ptr = p;
+                        preprocess(tokenFlags & TOK_FLAG_BOF);
+                        p = curFile.buf_ptr;
+                        goto maybe_newline;
+                    }
+                    else
+                    {
+                        if (c == '#')
+                        {
+                            p++;
+                            tok = (int)TPTOKEN.TOK_TWOSHARPS;
+                        }
+                        else
+                        {
+                            if ((parseFlags & PARSE_FLAG_ASM_FILE) != 0)
+                            {
+                                p = parse_line_comment(p - 1);
+                                goto redo_no_start;
+                            }
+                            else
+                            {
+                                tok = '#';
+                            }
+                        }
+                    }
                     break;
 
                 //identifiers
@@ -4174,6 +3942,235 @@ identifier case handled for labels. */
             return 0;
 
         }
+    }
+
+    public enum TPTOKEN
+    {
+        TOK_ULT = 0x92,
+        TOK_UGE = 0x93,
+        TOK_EQ = 0x94,
+        TOK_NE = 0x95,
+        TOK_ULE = 0x96,
+        TOK_UGT = 0x97,
+        TOK_Nset = 0x98,
+        TOK_Nclear = 0x99,
+        TOK_LT = 0x9c,
+        TOK_GE = 0x9d,
+        TOK_LE = 0x9e,
+        TOK_GT = 0x9f,
+
+        TOK_LAND = 0xa0,
+        TOK_LOR = 0xa1,
+        TOK_DEC = 0xa2,
+        TOK_MID = 0xa3,/* inc/dec, to void constant */
+        TOK_INC = 0xa4,
+        TOK_UDIV = 0xb0,/* unsigned division */
+        TOK_UMOD = 0xb1, /* unsigned modulo */
+        TOK_PDIV = 0xb2, /* fast division with undefined rounding for pointers */
+
+        TOK_CCHAR = 0xb3,           /* char constant in tokc */
+        TOK_LCHAR = 0xb4,
+        TOK_CINT = 0xb5,            /* number in tokc */
+        TOK_CUINT = 0xb6,           /* unsigned int constant */
+        TOK_CLLONG = 0xb7,          /* long long constant */
+        TOK_CULLONG = 0xb8,         /* unsigned long long constant */
+        TOK_STR = 0xb9,             /* pointer to string in tokc */
+        TOK_LSTR = 0xba,
+        TOK_CFLOAT = 0xbb,          /* float constant */
+        TOK_CDOUBLE = 0xbc,         /* double constant */
+        TOK_CLDOUBLE = 0xbd,        /* long double constant */
+        TOK_PPNUM = 0xbe,           /* preprocessor number */
+        TOK_PPSTR = 0xbf,           /* preprocessor string */
+        TOK_LINENUM = 0xc0,         /* line number info */
+        TOK_TWODOTS = 0xa8,         /* C++ token ? */
+
+        TOK_UMULL = 0xc2,           /* unsigned 32x32 -> 64 mul */
+        TOK_ADDC1 = 0xc3,           /* add with carry generation */
+        TOK_ADDC2 = 0xc4,           /* add with carry use */
+        TOK_SUBC1 = 0xc5,           /* add with carry generation */
+        TOK_SUBC2 = 0xc6,           /* add with carry use */
+        TOK_ARROW = 0xc7,
+        TOK_DOTS = 0xc8,            /* three dots */
+        TOK_SHR = 0xc9,             /* unsigned shift right */
+        TOK_TWOSHARPS = 0xca,       /* ## preprocessing token */
+        TOK_PLCHLDR = 0xcb,         /* placeholder token as defined in C99 */
+        TOK_NOSUBST = 0xcc,         /* means following token has already been pp'd */
+        TOK_PPJOIN = 0xcd,          /* A '##' in the right position to mean pasting */
+        TOK_CLONG = 0xce,           /* long constant */
+        TOK_CULONG = 0xcf,          /* unsigned long constant */
+
+        TOK_SHL = 0x01,             /* shift left */
+        TOK_SAR = 0x02,             /* signed shift right */
+
+        /* assignment operators : normal operator or 0x80 */
+        TOK_A_MOD = 0xa5,
+        TOK_A_AND = 0xa6,
+        TOK_A_MUL = 0xaa,
+        TOK_A_ADD = 0xab,
+        TOK_A_SUB = 0xad,
+        TOK_A_DIV = 0xaf,
+        TOK_A_XOR = 0xde,
+        TOK_A_OR = 0xfc,
+        TOK_A_SHL = 0x81,
+        TOK_A_SAR = 0x82,
+
+        TOK_EOF = -1,
+        TOK_LINEFEED = 10,             /* line feed */
+
+        TOK_LAST = 255,
+        TOK_IDENT = 256,
+
+        TOK_INT = 256,
+        TOK_VOID,
+        TOK_CHAR,
+        TOK_IF,
+        TOK_ELSE,
+        TOK_WHILE,
+        TOK_BREAK,
+        TOK_RETURN,
+        TOK_FOR,
+        TOK_EXTERN,
+        TOK_STATIC,
+        TOK_UNSIGNED,
+        TOK_GOTO,
+        TOK_DO,
+        TOK_CONTINUE,
+        TOK_SWITCH,
+        TOK_CASE,
+
+        TOK_CONST1,
+        TOK_CONST2, /* gcc keyword */
+        TOK_CONST3, /* gcc keyword */
+        TOK_VOLATILE1,
+        TOK_VOLATILE2, /* gcc keyword */
+        TOK_VOLATILE3, /* gcc keyword */
+        TOK_LONG,
+        TOK_REGISTER,
+        TOK_SIGNED1,
+        TOK_SIGNED2, /* gcc keyword */
+        TOK_SIGNED3, /* gcc keyword */
+        TOK_AUTO,
+        TOK_INLINE1,
+        TOK_INLINE2, /* gcc keyword */
+        TOK_INLINE3, /* gcc keyword */
+        TOK_RESTRICT1,
+        TOK_RESTRICT2,
+        TOK_RESTRICT3,
+        TOK_EXTENSION, /* gcc keyword */
+
+        TOK_GENERIC,
+
+        TOK_FLOAT,
+        TOK_DOUBLE,
+        TOK_BOOL,
+        TOK_SHORT,
+        TOK_STRUCT,
+        TOK_UNION,
+        TOK_TYPEDEF,
+        TOK_DEFAULT,
+        TOK_ENUM,
+        TOK_SIZEOF,
+        TOK_ATTRIBUTE1,
+        TOK_ATTRIBUTE2,
+        TOK_ALIGNOF1,
+        TOK_ALIGNOF2,
+        TOK_TYPEOF1,
+        TOK_TYPEOF2,
+        TOK_TYPEOF3,
+        TOK_LABEL,
+        TOK_ASM1,
+        TOK_ASM2,
+        TOK_ASM3,
+
+
+        /*********************************************************************/
+        /* the following are not keywords. They are included to ease parsing */
+        /* preprocessor only */
+        TOK_DEFINE,
+        TOK_UIDENT = TOK_DEFINE,
+        TOK_INCLUDE,
+        TOK_INCLUDE_NEXT,
+        TOK_IFDEF,
+        TOK_IFNDEF,
+        TOK_ELIF,
+        TOK_ENDIF,
+        TOK_DEFINED,
+        TOK_UNDEF,
+        TOK_ERROR,
+        TOK_WARNING,
+        TOK_LINE,
+        TOK_PRAGMA,
+        TOK___LINE__,
+        TOK___FILE__,
+        TOK___DATE__,
+        TOK___TIME__,
+        TOK___FUNCTION__,
+        TOK___VA_ARGS__,
+        TOK___COUNTER__,
+
+        /* special identifiers */
+        TOK___FUNC__,
+
+        /* special floating point values */
+        TOK___NAN__,
+        TOK___SNAN__,
+        TOK___INF__,
+
+        /* attribute identifiers */
+        /* XXX: handle all tokens generically since speed is not critical */
+        TOK_SECTION1,
+        TOK_SECTION2,
+        TOK_ALIGNED1,
+        TOK_ALIGNED2,
+        TOK_PACKED1,
+        TOK_PACKED2,
+        TOK_WEAK1,
+        TOK_WEAK2,
+        TOK_ALIAS1,
+        TOK_ALIAS2,
+        TOK_UNUSED1,
+        TOK_UNUSED2,
+        TOK_CDECL1,
+        TOK_CDECL2,
+        TOK_CDECL3,
+        TOK_STDCALL1,
+        TOK_STDCALL2,
+        TOK_STDCALL3,
+        TOK_FASTCALL1,
+        TOK_FASTCALL2,
+        TOK_FASTCALL3,
+        TOK_REGPARM1,
+        TOK_REGPARM2,
+
+        TOK_MODE,
+        TOK_MODE_QI,
+        TOK_MODE_DI,
+        TOK_MODE_HI,
+        TOK_MODE_SI,
+        TOK_MODE_word,
+
+        TOK_DLLEXPORT,
+        TOK_DLLIMPORT,
+        TOK_NORETURN1,
+        TOK_NORETURN2,
+        TOK_VISIBILITY1,
+        TOK_VISIBILITY2,
+
+        TOK_builtin_types_compatible_p,
+        TOK_builtin_choose_expr,
+        TOK_builtin_constant_p,
+        TOK_builtin_frame_address,
+        TOK_builtin_return_address,
+        TOK_builtin_expect,
+
+        /* pragma */
+        TOK_pack,
+        TOK_comment,
+        TOK_lib,
+        TOK_push_macro,
+        TOK_pop_macro,
+        TOK_once,
+        TOK_option
     }
 
     //-----------------------------------------------------------------------------
