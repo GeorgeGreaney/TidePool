@@ -34,11 +34,6 @@ namespace TidePool
 
         public List<BufferedFile> infiles;
 
-        /* compilation */
-        public int INCLUDE_STACK_SIZE = 32;
-        public BufferedFile[] include_stack;
-        public int include_stack_ptr;
-
         public int ifdef_stack_ptr;
 
         public int verbose;			/* if true, display some information during compilation */
@@ -102,28 +97,30 @@ namespace TidePool
         //    int nosse; /* For -mno-sse support. */
         //#endif
 
-        //    /* array of all loaded dlls (including those referenced by loaded dlls) */
+        /* array of all loaded dlls (including those referenced by loaded dlls) */
         //    DLLReference **loaded_dlls;
         //    int nb_loaded_dlls;
 
-        //    /* include paths */
-        //    char **include_paths;
-        //    int nb_include_paths;
+        public static char[] PATHSEP = { ';' };
 
-        //    char **sysinclude_paths;
-        //    int nb_sysinclude_paths;
+        /* include paths */
+        public List<string> include_paths;
+        public int nb_include_paths;
 
-        //    /* library paths */
-        //    char **library_paths;
-        //    int nb_library_paths;
+        public List<string> sysinclude_paths;
+        public int nb_sysinclude_paths;
 
-        //    /* crt?.o object path */
-        //    char **crt_paths;
-        //    int nb_crt_paths;
+        /* library paths */
+        public List<string> library_paths;
+        public int nb_library_paths;
 
-        //    /* -include files */
-        //    char **cmd_include_files;
-        //    int nb_cmd_include_files;
+        /* crt?.o object path */
+        public List<string> crt_paths;
+        public int nb_crt_paths;
+
+        /* -include files */
+        public List<string> cmd_include_files;
+        public int nb_cmd_include_files;
 
         /* error handling */
         //    void *error_opaque;
@@ -141,15 +138,17 @@ namespace TidePool
         //    LINE_MACRO_OUTPUT_FORMAT_P10 = 11
         //    } Pflag; /* -P switch */
 
-            public int dflag; /* -dX value */
+        public int dflag; /* -dX value */
 
         //    /* for -MD/-MF: collected dependencies for this compilation */
         //    char **target_deps;
         //    int nb_target_deps;
 
-        //    /* compilation */
-        //    BufferedFile *include_stack[INCLUDE_STACK_SIZE];
-        //    BufferedFile **include_stack_ptr;
+        /* compilation */
+        public int INCLUDE_STACK_SIZE = 32;
+        public BufferedFile[] include_stack;
+        public int include_stack_ptr;
+
 
         //    int ifdef_stack[IFDEF_STACK_SIZE];
         //    int *ifdef_stack_ptr;
@@ -215,16 +214,16 @@ namespace TidePool
 
         /* used by main and tcc_parse_args only */
         public List<FileSpec> files;        /* files seen on command line */
-        int nb_files;				        /* number thereof */
-        int nb_libraries;			        /* number of libs thereof */
+        public int nb_files;				        /* number thereof */
+        public int nb_libraries;			        /* number of libs thereof */
         public FILETYPE filetype;
         public FileStream outfile;
         public string outFilename;          /* output filename */
-        int option_r;				        /* option -r */
-        int do_bench;				    /* option -bench */
-        int gen_deps;				    /* option -MD  */
-        string deps_outfile;			/* option -MF */
-        int option_pthread;			    /* -pthread option */
+        public int option_r;				        /* option -r */
+        public int do_bench;				    /* option -bench */
+        public int gen_deps;				    /* option -MD  */
+        public string deps_outfile;			/* option -MF */
+        public int option_pthread;			    /* -pthread option */
         //    int argc;
         //    char **argv;
 
@@ -263,6 +262,17 @@ namespace TidePool
             do_debug = 0;
             section_align = 0;
 
+            include_paths = new List<string>();
+            nb_include_paths = 0;
+            sysinclude_paths = new List<string>();
+            nb_sysinclude_paths = 0;
+            library_paths = new List<string>();
+            nb_library_paths = 0;
+            crt_paths = new List<string>();
+            nb_crt_paths = 0;
+            cmd_include_files = new List<string>();
+            nb_cmd_include_files = 0;
+
             sections = new List<Section>();
             nb_sections = 0;
             priv_sections = new List<Section>();
@@ -275,7 +285,7 @@ namespace TidePool
         public void set_environment() { }
         public void default_outputfile() { }
 
-        public int getclock_ms() 
+        public int getclock_ms()
         {
             return Environment.TickCount;
         }
@@ -354,8 +364,8 @@ namespace TidePool
             //                tcc_set_options(s, "-lpthread");
             //        }
 
-                    if (do_bench != 0)
-                        start_time = getclock_ms();			//get start time
+            if (do_bench != 0)
+                start_time = getclock_ms();			//get start time
             //    }
 
             //    set_environment(s);
@@ -440,14 +450,34 @@ namespace TidePool
         public void normalize_slashes() { }
         public void tp_set_lib_path_w32() { }
         public void tp_add_systemdir() { }
-        public void pstrcpy() { }
-        public void pstrcat() { }
+
+        //---------------------------------------------------------------------
+
+        /* copy a string and truncate it. */
+        public string pstrcpy(string buf, int buf_size, string s)
+        {
+            buf = s.Substring(0, buf_size);
+            return buf;
+        }
+
+        /* strcat and truncate. */
+        public string pstrcat(string buf, int buf_size, string s)
+        {
+            buf += s;
+            return buf;
+        }
+
         public void pstrncpy() { }
-        public void tp_basename() { }
         public void tp_fileextension() { }
 
         public void tp_realloc() { }
-        public void tp_split_path() { }
+        
+        public void tp_split_path(List<string> pathList, ref int pathCount, string instr)
+        { 
+            string[] paths = instr.Split(PATHSEP);
+            pathList.AddRange(paths);
+            pathCount = pathList.Count;
+        }
 
         //- messages ------------------------------------------------------------------
 
@@ -481,6 +511,7 @@ namespace TidePool
             int buflen = (initlen != 0) ? initlen : IO_BUF_SIZE;
             BufferedFile bf = new BufferedFile(this, filename, initlen, buflen);
             infiles.Add(bf);
+            bf.prev = prep.curFile;
             prep.curFile = bf;
         }
 
@@ -496,7 +527,7 @@ namespace TidePool
                 return -1;
             }
             tp_open_bf(filename, 0);
-            infiles[infiles.Count - 1].fs = fs;
+            prep.curFile.fs = fs;
 
             return 0;
         }
@@ -538,12 +569,25 @@ namespace TidePool
 
         //- file mgmt -----------------------------------------------------------------
 
-        public void tp_set_output_type() { }
-        public void tp_add_include_path() { }
-        public void tp_add_sysinclude_path() { }
+        public void tp_set_output_type() 
+        {
+        }
+
+        public int tp_add_include_path(string pathname)
+        {
+            tp_split_path(include_paths, ref nb_include_paths, pathname);
+            return 0;
+        }
+
+        public int tp_add_sysinclude_path(string pathname)
+        {
+            tp_split_path(sysinclude_paths, ref nb_sysinclude_paths, pathname);
+            return 0;
+        }
 
         public int tp_add_file_internal(String filename, int flags)
         {
+            /* open the file */
             int ret = tp_open(filename);
             if (ret < 0)
             {
@@ -551,7 +595,65 @@ namespace TidePool
                     tp_error_noabort("file '%s' not found", filename);
                 return ret;
             }
+
+
+            //    /* update target deps */
+            //    dynarray_add(&s1->target_deps, &s1->nb_target_deps, tcc_strdup(filename));
+
+            //    if (flags & AFF_TYPE_BIN) {
+            //        ElfW(Ehdr) ehdr;
+            //        int fd, obj_type;
+
+            //        fd = file->fd;
+            //        obj_type = tcc_object_type(fd, &ehdr);
+            //        lseek(fd, 0, SEEK_SET);
+
+            //#ifdef TCC_TARGET_MACHO
+            //        if (0 == obj_type && 0 == strcmp(tcc_fileextension(filename), ".dylib"))
+            //            obj_type = AFF_BINTYPE_DYN;
+            //#endif
+
+            //        switch (obj_type) {
+            //        case AFF_BINTYPE_REL:
+            //            ret = tcc_load_object_file(s1, fd, 0);
+            //            break;
+            //#ifndef TCC_TARGET_PE
+            //        case AFF_BINTYPE_DYN:
+            //            if (s1->output_type == TCC_OUTPUT_MEMORY) {
+            //                ret = 0;
+            //#ifdef TCC_IS_NATIVE
+            //                if (NULL == dlopen(filename, RTLD_GLOBAL | RTLD_LAZY))
+            //                    ret = -1;
+            //#endif
+            //            } else {
+            //                ret = tcc_load_dll(s1, fd, filename,
+            //                    (flags & AFF_REFERENCED_DLL) != 0);
+            //            }
+            //            break;
+            //#endif
+            //        case AFF_BINTYPE_AR:
+            //            ret = tcc_load_archive(s1, fd);
+            //            break;
+            //#ifdef TCC_TARGET_COFF
+            //        case AFF_BINTYPE_C67:
+            //            ret = tcc_load_coff(s1, fd);
+            //            break;
+            //#endif
+            //        default:
+            //#ifdef TCC_TARGET_PE
+            //            ret = pe_load_file(s1, filename, fd);
+            //#else
+            //            /* as GNU ld, consider it is an ld script if not recognized */
+            //            ret = tcc_load_ldscript(s1);
+            //#endif
+            //            if (ret < 0)
+            //                tcc_error_noabort("unrecognized file type");
+            //            break;
+            //        }
+            //    } else {
             ret = tp_compile();
+            //    }
+
             tp_close();
             return ret;
         }
@@ -562,9 +664,19 @@ namespace TidePool
             int flags = AFF_PRINT_ERROR;
             if (ftype == FILETYPE.NONE)
             {
+                /* use a file extension to detect a filetype */
                 string ext = Path.GetExtension(filename);
                 switch (ext)
                 {
+                    //        if (!strcmp(ext, "S"))
+                    //            filetype = AFF_TYPE_ASMPP;
+                    //        else if (!strcmp(ext, "s"))
+                    //            filetype = AFF_TYPE_ASM;
+                    //        else if (!PATHCMP(ext, "c") || !PATHCMP(ext, "i"))
+                    //            filetype = AFF_TYPE_C;
+                    //        else
+                    //            flags |= AFF_TYPE_BIN;
+
                     case ".c":
                         ftype = FILETYPE.C;
                         break;

@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
 
 namespace TidePool
 {
@@ -111,14 +112,96 @@ namespace TidePool
         {
             FileSpec fspec = new FileSpec(filename, tp.alacarte_link, filetype);
             tp.files.Add(fspec);
+            tp.nb_files = tp.files.Count;
         }
 
-        public void args_parser_make_argv() 
-        { 
-        }
-
-        public void args_parser_listfile()
+        //read contents of list file into a string list
+        public static List<string> args_parser_make_argv(byte[] buf)
         {
+            char c;
+            int bufpos = 0;
+            string argstr;
+            bool inquote;
+            List<string> args = new List<string>();
+
+            for (; ; )
+            {
+                c = (char)buf[bufpos];
+                while ((c != '\0' && c <= ' '))         //skip leading spaces
+                {
+                    ++bufpos;
+                    c = (char)buf[bufpos];
+                }
+                if (c == 0)             //if at end of buf
+                    break;
+
+                inquote = false;
+                argstr = "";
+                c = (char)buf[bufpos];
+                while (c != 0)
+                {
+                    ++bufpos;
+                    if (c == '\\' && (buf[bufpos] == '"' || buf[bufpos] == '\\'))
+                    {
+                        c = (char)buf[bufpos++];        //handle escaped chars
+                    }
+                    else if (c == '"')
+                    {
+                        inquote = !inquote;             //at start or end of quoted str
+                        continue;
+                    }
+                    else if (!inquote && c <= ' ')      //args are delim by spaces, unless inside a quote
+                    {
+                        break;
+                    }
+                    argstr += c;
+                    c = (char)buf[bufpos];
+                }
+
+                Console.Out.WriteLine("<{0}>", argstr);
+                args.Add(argstr);                           //add to arg list
+            }
+
+            return args;
+        }
+
+        /* read list file */
+        public static void args_parser_listfile(TidePool tp, string filename, int optind, ref int pargc, ref string[] pargv)
+        {
+            FileStream fd = null;
+
+            //read list file into buf
+            try
+            {
+                fd = File.Open(filename, FileMode.Open);
+            }
+            catch (Exception e)
+            {
+                tp.tp_error("listfile '{0}' not found", filename);
+            }
+
+            int len = (int)fd.Length;
+            byte[] buf = new byte[len + 1];         //extra byte for null terminator
+            fd.Read(buf, 0, len);
+            buf[len] = 0;
+            fd.Close();
+
+            //copy list file contents into arg list
+            List<string> args = new List<string>();         //new args array
+            for (int i = 0; i < pargc; ++i)
+            {
+                if (i == optind)
+                {
+                    args.AddRange(args_parser_make_argv(buf));        //replace @listfile arg with contents
+                }
+                else
+                {
+                    args.Add(pargv[i]);         //copy rest of args to new array
+                }
+            }
+
+            pargc = args.Count;
+            pargv = args.ToArray();
         }
 
         public static RETCODE tp_parse_args(TidePool tp, string[] args)
@@ -145,7 +228,8 @@ namespace TidePool
                 r = args[optind];
                 if (r[0] == '@' && r.Length > 1)
                 {
-                    //args_parser_listfile(s, r + 1, optind, &argc, &argv);
+                    string fname = r.Substring(1);
+                    args_parser_listfile(tp, fname, optind, ref argc, ref args);
                     continue;
                 }
                 optind++;
@@ -159,8 +243,8 @@ namespace TidePool
             reparse:
                 if (r[0] != '-' || r.Length == 1)       //get source filename OR '-' for stdin
                 {
-                                if (r[0] != '@')								/* allow "tcc file(s) -run @ args ..." */
-                                    args_parser_add_file(tp, r, tp.filetype);
+                    if (r[0] != '@')								/* allow "tcc file(s) -run @ args ..." */
+                        args_parser_add_file(tp, r, tp.filetype);
                     if (run != null)
                     {
                         //                tcc_set_options(s, run);
@@ -208,32 +292,41 @@ namespace TidePool
                 {
                     //        case TCC_OPTION_HELP:
                     //            return OPT_HELP;
+
                     //        case TCC_OPTION_HELP2:
                     //            return OPT_HELP2;
-                    //        case TCC_OPTION_I:
-                    //            tcc_add_include_path(s, optarg);
-                    //            break;
+
+                    case TPOPTIONS.TP_OPTION_I:
+                        tp.tp_add_include_path(optarg);
+                        break;
+
                     //        case TCC_OPTION_D:
                     //            parse_option_D(s, optarg);
                     //            break;
+
                     //        case TCC_OPTION_U:
                     //            tcc_undefine_symbol(s, optarg);
                     //            break;
+
                     //        case TCC_OPTION_L:
                     //            tcc_add_library_path(s, optarg);
                     //            break;
+
                     //        case TCC_OPTION_B:
                     //            /* set tcc utilities path (mainly for tcc development) */
                     //            tcc_set_lib_path(s, optarg);
                     //            break;
+
                     //        case TCC_OPTION_l:
                     //            args_parser_add_file(s, optarg, AFF_TYPE_LIB);
                     //            s->nb_libraries++;
                     //            break;
+
                     //        case TCC_OPTION_pthread:
                     //            parse_option_D(s, "_REENTRANT");
                     //            s->option_pthread = 1;
                     //            break;
+
                     //        case TCC_OPTION_bench:
                     //            s->do_bench = 1;
                     //            break;
@@ -261,7 +354,7 @@ namespace TidePool
                         tp.output_type = OUTPUTTYPE.TP_OUTPUT_OBJ;
                         break;
 
-                        //called from other options
+                    //called from other options
                     //            x = TCC_OUTPUT_OBJ;
                     //set_output_type:
                     //            if (s->output_type)
@@ -285,10 +378,10 @@ namespace TidePool
                     //        case TCC_OPTION_static:
                     //            s->static_link = 1;
                     //            break;
-                    //        case TCC_OPTION_std:
-                    //            /* silently ignore, a current purpose:
-                    //            allow to use a tcc as a reference compiler for "make test" */
-                    //            break;
+
+                    case TPOPTIONS.TP_OPTION_std:
+                        /* silently ignore, a current purpose: allow to use a tcc as a reference compiler for "make test" */
+                        break;
 
                     //        case TCC_OPTION_shared:
                     //            x = TCC_OUTPUT_DLL;
@@ -313,17 +406,19 @@ namespace TidePool
                     //            x = TCC_OUTPUT_OBJ;
                     //            goto set_output_type;
 
-                    //        case TCC_OPTION_isystem:
-                    //            tcc_add_sysinclude_path(s, optarg);
-                    //            break;
+                    case TPOPTIONS.TP_OPTION_isystem:
+                        tp.tp_add_sysinclude_path(optarg);
+                        break;
 
                     //        case TCC_OPTION_include:
                     //            dynarray_add(&s->cmd_include_files,
                     //                &s->nb_cmd_include_files, tcc_strdup(optarg));
                     //            break;
+
                     //        case TCC_OPTION_nostdinc:
                     //            s->nostdinc = 1;
                     //            break;
+
                     //        case TCC_OPTION_nostdlib:
                     //            s->nostdlib = 1;
                     //            break;
@@ -351,6 +446,7 @@ namespace TidePool
                     //            if (set_flag(s, options_f, optarg) < 0)
                     //                goto unsupported_option;
                     //            break;
+
                     //#ifdef TCC_TARGET_ARM
                     //        case TCC_OPTION_mfloat_abi:
                     //            /* tcc doesn't support soft float yet */
@@ -372,16 +468,20 @@ namespace TidePool
                     //                ++noaction;
                     //            }
                     //            break;
+
                     //        case TCC_OPTION_W:
                     //            if (set_flag(s, options_W, optarg) < 0)
                     //                goto unsupported_option;
                     //            break;
+
                     //        case TCC_OPTION_w:
                     //            s->warn_none = 1;
                     //            break;
+
                     //        case TCC_OPTION_rdynamic:
                     //            s->rdynamic = 1;
                     //            break;
+
                     //        case TCC_OPTION_Wl:
                     //            if (linker_arg.size)
                     //                --linker_arg.size, cstr_ccat(&linker_arg, ',');
@@ -389,6 +489,7 @@ namespace TidePool
                     //            if (tcc_set_linker(s, linker_arg.data))
                     //                cstr_free(&linker_arg);
                     //            break;
+
                     //        case TCC_OPTION_Wp:
                     //            r = optarg;
                     //            goto reparse;
@@ -402,16 +503,20 @@ namespace TidePool
                     //        case TCC_OPTION_P:
                     //            s->Pflag = atoi(optarg) + 1;
                     //            break;
+
                     //        case TCC_OPTION_MD:
                     //            s->gen_deps = 1;
                     //            break;
+
                     //        case TCC_OPTION_MF:
                     //            s->deps_outfile = tcc_strdup(optarg);
                     //            break;
+
                     //        case TCC_OPTION_dumpversion:
                     //            printf ("%s\n", TCC_VERSION);
                     //            exit(0);
                     //            break;
+
                     //        case TCC_OPTION_x:
                     //            if (*optarg == 'c')
                     //                s->filetype = AFF_TYPE_C;
@@ -422,15 +527,19 @@ namespace TidePool
                     //            else
                     //                tcc_warning("unsupported language '%s'", optarg);
                     //            break;
+
                     //        case TCC_OPTION_O:
                     //            last_o = atoi(optarg);
                     //            break;
+
                     //        case TCC_OPTION_print_search_dirs:
                     //            x = OPT_PRINT_DIRS;
                     //            goto extra_action;
+
                     //        case TCC_OPTION_impdef:
                     //            x = OPT_IMPDEF;
                     //            goto extra_action;
+
                     //        case TCC_OPTION_ar:
                     //            x = OPT_AR;
                     //extra_action:
